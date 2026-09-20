@@ -415,6 +415,7 @@ function showLoupeBubble(which, t) {
   let drag = null; // { which, offset }
   el.loupeTrack.addEventListener("pointerdown", (e) => {
     if (!state.ready) return;
+    e.preventDefault();
     const handle = e.target.closest(".loupe-handle");
     const t = loupeTimeAt(e.clientX);
     state.loupe.frozen = true;
@@ -458,6 +459,7 @@ function showLoupeBubble(which, t) {
   }
 }
 window.addEventListener("resize", () => { loupeTickKey = ""; renderLoupe(); });
+for (const s of [el.track, el.loupeTrack, el.shield, el.knob]) s.addEventListener("contextmenu", (e) => e.preventDefault());
 
 // ---------- 表示サイズと拡大 ----------
 
@@ -910,6 +912,7 @@ document.querySelectorAll(".nudge").forEach((wrap) => {
   const dist = () => { const [a, b] = [...touches.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
 
   el.shield.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
     touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
     try { el.shield.setPointerCapture(e.pointerId); } catch {}
     if (touches.size === 2) {
@@ -1091,6 +1094,7 @@ function hideBubble() { el.bubble.classList.remove("show"); }
 // ミニマップ：クリック／ドラッグで頭出しだけ
 el.track.addEventListener("pointerdown", (e) => {
   if (!state.ready) return;
+  e.preventDefault();
   state.dragging = "seek";
   try { el.track.setPointerCapture(e.pointerId); } catch {}
   const t = timeAt(e.clientX);
