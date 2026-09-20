@@ -26,11 +26,34 @@
         <span class="logo-sub">ループ練習 · YouTube A–B</span>
       </div>
       <form class="loader" id="loadForm">
-        <input id="urlInput" type="url" inputmode="url" autocomplete="off" spellcheck="false"
-               placeholder="YouTube の URL を貼り付け" aria-label="YouTube の URL">
+        <input id="urlInput" type="text" inputmode="search" enterkeyhint="search" autocomplete="off" spellcheck="false"
+               placeholder="YouTube の URL を貼り付け、または曲名などで検索" aria-label="YouTube の URL または検索語">
         <button type="submit">LOAD</button>
       </form>
     </header>
+
+    <section class="search" id="searchPanel" hidden>
+      <div class="panel-head">
+        <span>Search</span>
+        <span class="panel-head-sub" id="searchStatus"></span>
+        <button type="button" class="search-close" id="searchClose" aria-label="閉じる">×</button>
+      </div>
+      <ul class="search-list" id="searchList"></ul>
+      <div class="search-setup" id="searchSetup" hidden>
+        <p>検索には Google の <strong>YouTube Data API キー</strong>が必要です（無料）。取り方：</p>
+        <ol>
+          <li><a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener">Google Cloud Console</a> を開き、Google アカウントでログイン（プロジェクトがなければ「プロジェクトを作成」）</li>
+          <li>「YouTube Data API v3」を<strong>有効にする</strong></li>
+          <li>左メニュー「認証情報」→「認証情報を作成」→「API キー」</li>
+          <li>表示されたキーを下に貼り付けて保存</li>
+        </ol>
+        <form class="key-form" id="keyForm">
+          <input id="apiKeyInput" type="text" autocomplete="off" spellcheck="false" placeholder="AIza… で始まるキー" aria-label="YouTube Data API キー">
+          <button type="submit">保存</button>
+        </form>
+        <p class="key-note">キーはこのブラウザの中にだけ保存され、YouTube への検索リクエスト以外には使いません。</p>
+      </div>
+    </section>
 
     <aside class="presets">
       <div class="panel-head">
@@ -48,6 +71,15 @@
         <div class="panel-head"><span>History</span><span class="panel-head-sub">読み込んだ動画</span></div>
         <ul id="recentList" class="recent-list"></ul>
       </div>
+
+      <details class="settings">
+        <summary>設定</summary>
+        <label class="settings-row">
+          <span>YouTube Data API キー</span>
+          <input id="apiKeyInput2" type="text" autocomplete="off" spellcheck="false" placeholder="未設定">
+        </label>
+        <button type="button" id="apiKeyClear" class="text-btn">キーを削除</button>
+      </details>
 
       <details class="keys">
         <summary>キーボード操作（Mac）</summary>

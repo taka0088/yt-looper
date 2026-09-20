@@ -60,6 +60,15 @@ const el = {
   recentWrap: $("#recentWrap"),
   recentList: $("#recentList"),
   toast: $("#toast"),
+  searchPanel: $("#searchPanel"),
+  searchList: $("#searchList"),
+  searchStatus: $("#searchStatus"),
+  searchSetup: $("#searchSetup"),
+  searchClose: $("#searchClose"),
+  keyForm: $("#keyForm"),
+  apiKeyInput: $("#apiKeyInput"),
+  apiKeyInput2: $("#apiKeyInput2"),
+  apiKeyClear: $("#apiKeyClear"),
   shield: $("#shield"),
   shieldMsg: $("#shieldMsg"),
   hidePaused: $("#hidePaused"),
@@ -718,7 +727,12 @@ requestAnimationFrame(tick);
 el.form.addEventListener("submit", (e) => {
   e.preventDefault();
   const v = parseVideo(el.input.value);
-  if (!v) return toast("YouTube の動画 URL として読み取れませんでした");
+  if (!v) {
+    const q = el.input.value.trim();
+    if (q) searchVideos(q);
+    return;
+  }
+  closeSearch();
   if (!state.apiReady) toast("YouTube のプレーヤーを準備中です。準備できたら自動で読み込みます");
   loadVideo(v.id, v.start);
   el.input.blur();
@@ -1038,6 +1052,109 @@ document.addEventListener("keyup", (e) => {
 
 window.addEventListener("resize", renderMarkers);
 
+// ---------- YouTube 検索（Data API v3、キーはブラウザ内に保存） ----------
+
+function getApiKey() { return (loadStore().settings?.ytApiKey || "").trim(); }
+function setApiKey(key) {
+  const store = loadStore();
+  store.settings = { ...(store.settings || {}), ytApiKey: key.trim() };
+  saveStore(store);
+  el.apiKeyInput.value = key.trim();
+  el.apiKeyInput2.value = key.trim();
+}
+
+function openSearch() { el.searchPanel.hidden = false; }
+function closeSearch() { el.searchPanel.hidden = true; }
+
+function fmtIsoDuration(iso) {
+  const m = /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/.exec(iso || "");
+  if (!m) return "";
+  const h = +m[1] || 0, mi = +m[2] || 0, s = +m[3] || 0;
+  return h ? `${h}:${String(mi).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${mi}:${String(s).padStart(2, "0")}`;
+}
+
+async function searchVideos(q) {
+  openSearch();
+  el.searchList.innerHTML = "";
+  const key = getApiKey();
+  if (!key) {
+    el.searchSetup.hidden = false;
+    el.searchStatus.textContent = "API キーが未設定です";
+    el.searchSetup.dataset.pendingQuery = q;
+    return;
+  }
+  el.searchSetup.hidden = true;
+  el.searchStatus.textContent = `「${q}」を検索中…`;
+  try {
+    const sp = new URLSearchParams({ part: "snippet", type: "video", videoEmbeddable: "true", maxResults: "12", q, key });
+    const r = await fetch("https://www.googleapis.com/youtube/v3/search?" + sp);
+    const data = await r.json();
+    if (!r.ok) throw Object.assign(new Error(data.error?.message || r.statusText), { code: r.status, reason: data.error?.errors?.[0]?.reason });
+    const items = (data.items || []).filter((it) => it.id?.videoId);
+    // 長さを取る（1 回で全件）
+    let durations = {};
+    if (items.length) {
+      const vp = new URLSearchParams({ part: "contentDetails", id: items.map((it) => it.id.videoId).join(","), key });
+      const vr = await fetch("https://www.googleapis.com/youtube/v3/videos?" + vp);
+      const vd = await vr.json();
+      for (const v of vd.items || []) durations[v.id] = fmtIsoDuration(v.contentDetails?.duration);
+    }
+    renderSearch(items, durations);
+    el.searchStatus.textContent = items.length ? `「${q}」の結果 ${items.length} 件` : `「${q}」に一致する動画はありません`;
+  } catch (err) {
+    const reason = err.reason || "";
+    let msg = "検索できませんでした: " + err.message;
+    if (reason === "quotaExceeded") msg = "本日の検索回数の上限に達しました（Google の無料枠）。明日また使えます。";
+    else if (err.code === 400 || err.code === 403) msg = "API キーが無効か、YouTube Data API v3 が有効になっていません。設定を確認してください。";
+    el.searchStatus.textContent = msg;
+    if (err.code === 400 || err.code === 403) el.searchSetup.hidden = false;
+  }
+}
+
+function renderSearch(items, durations) {
+  el.searchList.innerHTML = "";
+  for (const it of items) {
+    const id = it.id.videoId;
+    const sn = it.snippet || {};
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "open";
+    b.innerHTML = `<span class="thumb"><img alt="" loading="lazy"><span class="dur"></span></span><span class="meta"><span class="title"></span><span class="sub"></span></span>`;
+    b.querySelector("img").src = sn.thumbnails?.medium?.url || `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+    b.querySelector(".dur").textContent = durations[id] || "";
+    b.querySelector(".title").textContent = decodeEntities(sn.title || id);
+    b.querySelector(".sub").textContent = decodeEntities(sn.channelTitle || "");
+    b.addEventListener("click", () => {
+      closeSearch();
+      el.input.value = "";
+      loadVideo(id, 0);
+    });
+    li.appendChild(b);
+    el.searchList.appendChild(li);
+  }
+}
+
+function decodeEntities(s) {
+  const t = document.createElement("textarea");
+  t.innerHTML = s;
+  return t.value;
+}
+
+el.searchClose.addEventListener("click", closeSearch);
+el.keyForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const key = el.apiKeyInput.value.trim();
+  if (!key) return toast("キーを入力してください");
+  setApiKey(key);
+  toast("保存しました");
+  const q = el.searchSetup.dataset.pendingQuery;
+  if (q) searchVideos(q);
+});
+el.apiKeyInput2.addEventListener("change", () => setApiKey(el.apiKeyInput2.value));
+el.apiKeyClear.addEventListener("click", () => { setApiKey(""); toast("キーを削除しました"); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !el.searchPanel.hidden) closeSearch(); });
+
 // ---------- 診断表示：何かが壊れたら画面に出す ----------
 function showDiag(msg) {
   let d = document.getElementById("diag");
@@ -1064,6 +1181,7 @@ renderLoop();
 el.hidePaused.checked = loadStore().settings?.hidePaused ?? true;
 el.showCaptions.checked = loadStore().settings?.showCaptions ?? false;
 el.countIn.checked = loadStore().settings?.countIn ?? false;
+el.apiKeyInput.value = el.apiKeyInput2.value = getApiKey();
 setSize("large");
 setTheater(!!loadStore().settings?.theater);
 renderZoom();
