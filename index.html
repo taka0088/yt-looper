@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>ループ練習</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111214">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ループ練習">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&display=swap" rel="stylesheet">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="https://cdn.jsdelivr.net/npm/dseg@0.46.0/fonts/DSEG7-Classic/DSEG7Classic-Bold.woff2">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app" data-size="large">
+
+    <header class="rail-top">
+      <div class="logo">
+        <span class="logo-mark">Looper</span>
+        <span class="logo-sub">ループ練習 · YouTube A–B</span>
+      </div>
+      <form class="loader" id="loadForm">
+        <input id="urlInput" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+               placeholder="YouTube の URL を貼り付け" aria-label="YouTube の URL">
+        <button type="submit">LOAD</button>
+      </form>
+    </header>
+
+    <aside class="presets">
+      <div class="panel-head">
+        <span>Presets</span>
+        <span class="panel-head-sub">保存した区間</span>
+      </div>
+      <div class="preset-cols"><span>#</span><span>Name</span><span>Range</span><span>Speed</span></div>
+      <ul id="savedList" class="saved-list"></ul>
+      <p class="saved-empty" id="savedEmpty">A と B を決めて Save を押すと、ここに並びます。次にこの動画を開いたときに呼び出せます。</p>
+      <div class="panel-foot">
+        <button id="saveLoop" type="button">Save as…</button>
+      </div>
+
+      <div class="recent" id="recentWrap" hidden>
+        <div class="panel-head"><span>History</span><span class="panel-head-sub">読み込んだ動画</span></div>
+        <ul id="recentList" class="recent-list"></ul>
+      </div>
+
+      <details class="keys">
+        <summary>キーボード操作（Mac）</summary>
+        <dl>
+          <div><dt>Space</dt><dd>再生 / 停止</dd></div>
+          <div><dt>A / B</dt><dd>今の位置を A点 / B点に</dd></div>
+          <div><dt>L</dt><dd>ループ切り替え</dd></div>
+          <div><dt>Enter</dt><dd>A点へ戻る</dd></div>
+          <div><dt>← / →</dt><dd>1秒戻る / 進む（Shift で5秒）</dd></div>
+          <div><dt>[ / ]</dt><dd>速度を下げる / 上げる</dd></div>
+          <div><dt>T</dt><dd>シアターモード（Esc で戻る）</dd></div>
+          <div><dt>F</dt><dd>全画面</dd></div>
+          <div><dt>+ / −</dt><dd>動画を拡大 / 縮小（iPhone はピンチ）</dd></div>
+        </dl>
+      </details>
+    </aside>
+
+    <section class="rack">
+
+      <article class="module screen">
+        <header class="module-head">
+          <h2>Screen</h2>
+          <div class="module-tools">
+            <div class="btn-group zoom" role="group" aria-label="拡大">
+              <button type="button" id="zoomOut" aria-label="縮小">−</button>
+              <span class="lcd small" id="zoomLabel">1.0×</span>
+              <button type="button" id="zoomIn" aria-label="拡大">＋</button>
+              <button type="button" id="zoomReset">Reset</button>
+            </div>
+          </div>
+        </header>
+        <div class="screen-body" id="screenBody">
+        <div class="video">
+          <div class="video-frame" id="videoFrame">
+            <div id="player"></div>
+          </div>
+          <div class="shield" id="shield" aria-hidden="true">
+            <div class="shield-msg" id="shieldMsg"></div>
+          </div>
+          <div class="video-empty" id="videoEmpty">
+            <p>上の欄に YouTube の URL を貼り付けると、ここに動画が出ます。</p>
+          </div>
+          <div class="corner" id="corner">
+            <button type="button" class="corner-btn" id="theaterBtn" aria-pressed="false" aria-label="シアターモード" title="シアターモード（T）">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            </button>
+            <button type="button" class="corner-btn" id="fullBtn" aria-pressed="false" aria-label="全画面" title="全画面（F）">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        </div>
+        <footer class="module-foot">
+          <label class="toggle">
+            <input type="checkbox" id="hidePaused" checked>
+            <span class="sw"></span>
+            <span class="toggle-label">停止中は YouTube の表示を隠す</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="countIn">
+            <span class="sw"></span>
+            <span class="toggle-label">再生前に 3 カウント</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="showCaptions">
+            <span class="sw"></span>
+            <span class="toggle-label">字幕</span>
+          </label>
+        </footer>
+      </article>
+
+      <article class="module looper">
+        <header class="module-head">
+          <h2>Looper</h2>
+          <div class="looper-head-right">
+            <div class="mini-speed" role="group" aria-label="再生速度">
+              <span class="led-label">Speed</span>
+              <button type="button" id="rateDown" aria-label="速度を下げる">−</button>
+              <span class="lcd small" id="rateLabel2">1×</span>
+              <button type="button" id="rateUp" aria-label="速度を上げる">＋</button>
+            </div>
+          </div>
+        </header>
+
+        <div class="timeline" id="timeline">
+          <div class="lcd time" id="curTime">0:00.0</div>
+          <div class="tl-track" id="track">
+            <div class="tl-region" id="region"></div>
+            <div class="tl-head" id="head"></div>
+            <div class="tl-bubble" id="bubble" aria-hidden="true"></div>
+            <div class="tl-handle a" id="handleA" data-marker="a" role="slider" tabindex="0" aria-label="A点"><span>A</span></div>
+            <div class="tl-handle b" id="handleB" data-marker="b" role="slider" tabindex="0" aria-label="B点"><span>B</span></div>
+          </div>
+          <div class="lcd time" id="durTime">0:00.0</div>
+        </div>
+
+        <div class="seek-row" role="group" aria-label="巻き戻し・早送り">
+          <span class="led-label">Seek</span>
+          <div class="seek-group back" id="seekBack"></div>
+          <div class="seek-group fwd" id="seekFwd"></div>
+        </div>
+
+        <div class="looper-grid">
+          <div class="marker a">
+            <div class="marker-top">
+              <span class="cap">A</span>
+              <input class="lcd time-input" id="timeA" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
+                     placeholder="0:00.0" aria-label="A点の時刻（分:秒）" disabled>
+            </div>
+            <div class="nudge" data-marker="a">
+              <button type="button" data-d="-1">−1s</button>
+              <button type="button" data-d="-0.1">−0.1s</button>
+              <button type="button" data-d="0.1">+0.1s</button>
+              <button type="button" data-d="1">+1s</button>
+            </div>
+            <button class="foot small" id="setA" type="button"><span class="foot-cap"></span><span class="foot-label">Set A</span></button>
+          </div>
+          <div class="marker b">
+            <div class="marker-top">
+              <span class="cap">B</span>
+              <input class="lcd time-input" id="timeB" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
+                     placeholder="0:00.0" aria-label="B点の時刻（分:秒）" disabled>
+            </div>
+            <div class="nudge" data-marker="b">
+              <button type="button" data-d="-1">−1s</button>
+              <button type="button" data-d="-0.1">−0.1s</button>
+              <button type="button" data-d="0.1">+0.1s</button>
+              <button type="button" data-d="1">+1s</button>
+            </div>
+            <button class="foot small" id="setB" type="button"><span class="foot-cap"></span><span class="foot-label">Set B</span></button>
+          </div>
+          <div class="transport">
+            <button class="foot" id="toA" type="button"><span class="foot-cap"></span><span class="foot-label">To A</span></button>
+            <button class="foot big" id="playPause" type="button" aria-pressed="false"><span class="foot-cap"></span><span class="foot-label">Play</span></button>
+            <button class="foot" id="loopToggle" type="button" aria-pressed="false"><span class="led red" id="loopLed"></span><span class="foot-cap"></span><span class="foot-label">Loop</span></button>
+          </div>
+        </div>
+      </article>
+
+
+    </section>
+
+    <section class="rack side">
+      <article class="module speed">
+        <header class="module-head">
+          <h2>Speed</h2>
+          <span class="lcd small" id="rateLabel">1×</span>
+        </header>
+        <div class="knob-wrap">
+          <div class="knob" id="speedKnob" role="slider" tabindex="0" aria-label="再生速度" aria-valuemin="0.25" aria-valuemax="2" aria-valuenow="1">
+            <svg viewBox="0 0 200 200" aria-hidden="true">
+              <circle class="knob-ring" cx="100" cy="100" r="86"/>
+              <g class="knob-ticks" id="knobTicks"></g>
+              <g class="knob-body" id="knobBody">
+                <circle class="knob-base" cx="100" cy="100" r="62"/>
+                <path class="knob-chicken" d="M100 22 L118 78 A34 34 0 1 1 82 78 Z"/>
+                <rect class="knob-line" x="98" y="30" width="4" height="34" rx="2"/>
+              </g>
+            </svg>
+          </div>
+          <div class="rates" id="rates"></div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="app.js"></script>
+</body>
+</html>
