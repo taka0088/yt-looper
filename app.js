@@ -41,8 +41,6 @@ const el = {
   loupeBubble: $("#loupeBubble"),
   loupeA: $("#loupeA"),
   loupeB: $("#loupeB"),
-  handleA: $("#handleA"),
-  handleB: $("#handleB"),
   curTime: $("#curTime"),
   durTime: $("#durTime"),
   timeA: $("#timeA"),
@@ -177,15 +175,11 @@ function renderMarkers() {
   const a = pct(state.a), b = pct(state.b);
   // 長い動画で短い区間を切ると帯が消えるので、見た目の最小幅と
   // ハンドル同士の最小間隔を確保する（値そのものは変えない）
-  // ハンドルは縦線なので実位置にそのまま置く（A のつまみは上、B は下にあり重なっても掴める）
+  // ミニマップ：A–B の帯だけを実位置に置く（つまみはルーペ帯側）
   const w = el.track.clientWidth || 1;
-  const regionW = Math.max((b - a) / 100 * w, 2);
+  const regionW = Math.max((b - a) / 100 * w, 3);
   el.region.style.left = a + "%";
   el.region.style.width = regionW + "px";
-  el.handleA.style.left = a + "%";
-  el.handleB.style.left = b + "%";
-  el.handleA.setAttribute("aria-valuetext", fmt(state.a));
-  el.handleB.setAttribute("aria-valuetext", fmt(state.b));
   el.timeA.disabled = el.timeB.disabled = !state.ready;
   if (document.activeElement !== el.timeA) el.timeA.value = state.ready ? fmt(state.a) : "";
   if (document.activeElement !== el.timeB) el.timeB.value = state.ready ? fmt(state.b) : "";
@@ -1083,27 +1077,22 @@ function showBubble(which, t) {
 }
 function hideBubble() { el.bubble.classList.remove("show"); }
 
-let dragOffset = 0; // ハンドルを掴んだ位置と実際の値のずれ（表示上ずらしている分）
+// ミニマップ：クリック／ドラッグで頭出しだけ
 el.track.addEventListener("pointerdown", (e) => {
   if (!state.ready) return;
-  const handle = e.target.closest(".tl-handle");
-  state.dragging = handle ? handle.dataset.marker : "seek";
+  state.dragging = "seek";
   try { el.track.setPointerCapture(e.pointerId); } catch {}
   const t = timeAt(e.clientX);
-  if (state.dragging === "seek") { renderHead(t); showBubble("seek", t); }
-  else { dragOffset = state[state.dragging] - t; showBubble(state.dragging, state[state.dragging]); }
+  renderHead(t); showBubble("seek", t);
 });
 el.track.addEventListener("pointermove", (e) => {
   if (!state.dragging) return;
   const t = timeAt(e.clientX);
-  if (state.dragging === "seek") { renderHead(t); showBubble("seek", t); }
-  else { setMarker(state.dragging, t + dragOffset); showBubble(state.dragging, state[state.dragging]); }
+  renderHead(t); showBubble("seek", t);
 });
 function endDrag(e) {
   if (!state.dragging) return;
-  const t = timeAt(e.clientX);
-  if (state.dragging === "seek") seek(t);
-  else seek(state[state.dragging]);
+  seek(timeAt(e.clientX));
   state.dragging = null;
   hideBubble();
 }
@@ -1124,15 +1113,6 @@ for (const [input, which] of [[el.timeA, "a"], [el.timeB, "b"]]) {
     if (t > state.duration) { toast("動画の長さを超えています"); input.value = fmt(state[which]); return; }
     setMarker(which, t);
     seek(state[which]);
-  });
-}
-
-// ハンドルをキーボードで微調整
-for (const h of [el.handleA, el.handleB]) {
-  h.addEventListener("keydown", (e) => {
-    const step = e.shiftKey ? 1 : 0.1;
-    if (e.key === "ArrowLeft") { setMarker(h.dataset.marker, state[h.dataset.marker] - step); e.preventDefault(); }
-    if (e.key === "ArrowRight") { setMarker(h.dataset.marker, state[h.dataset.marker] + step); e.preventDefault(); }
   });
 }
 
@@ -1167,7 +1147,7 @@ for (const h of [el.handleA, el.handleB]) {
 document.addEventListener("keydown", (e) => {
   const tag = document.activeElement?.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || e.metaKey || e.ctrlKey || e.altKey) return;
-  if ((document.activeElement?.classList.contains("tl-handle") || document.activeElement?.classList.contains("loupe-handle") || document.activeElement === el.knob) && e.key.startsWith("Arrow")) return;
+  if ((document.activeElement?.classList.contains("loupe-handle") || document.activeElement === el.knob) && e.key.startsWith("Arrow")) return;
   const key = e.code === "Space" ? " " : e.key;
   switch (key) {
     case " ": e.preventDefault(); togglePlay(); break;

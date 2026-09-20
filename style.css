@@ -592,46 +592,47 @@ button:disabled { opacity: .45; cursor: default; }
 .module.looper h2 { color: #ece2c8; }
 .module.looper .marker { background: rgba(0,0,0,.38); }
 
+/* ミニマップ：動画全体を細い帯で。A–B の位置と再生位置だけを見せる */
 .timeline {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 10px;
-  padding: 30px 0 12px; /* 上は吹き出しとつまみ、下はつまみの分 */
+  padding: 22px 0 2px; /* 上は吹き出しの分 */
 }
 .tl-track {
   position: relative;
-  height: 52px;
+  height: 18px;
   touch-action: none;
   cursor: pointer;
 }
 .tl-track::before {
   content: "";
   position: absolute; left: 0; right: 0; top: 50%;
-  height: 14px;
+  height: 8px;
   transform: translateY(-50%);
   background: linear-gradient(180deg, #0a0b0a, #151714);
-  border-radius: 3px;
-  box-shadow: inset 0 2px 4px rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.15);
+  border-radius: 4px;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.12);
 }
 .tl-region {
   position: absolute; top: 50%;
-  height: 10px;
+  height: 8px;
   transform: translateY(-50%);
   left: 0; width: 100%;
   background: #7a5316;
-  border-radius: 2px;
+  border-radius: 4px;
   transition: background .2s, box-shadow .2s;
 }
 .timeline.looping .tl-region {
   background: linear-gradient(180deg, #ffd27a, var(--amber) 50%, #e08a1e);
-  box-shadow: 0 0 14px var(--amber-glow);
+  box-shadow: 0 0 10px var(--amber-glow);
 }
 .tl-head {
-  position: absolute; top: 10px; bottom: 10px;
+  position: absolute; top: 2px; bottom: 2px;
   width: 2px; margin-left: -1px; left: 0;
   background: #fff;
-  box-shadow: 0 0 4px rgba(255,255,255,.8);
+  box-shadow: 0 0 4px rgba(255,255,255,.9);
   pointer-events: none;
 }
 .tl-bubble {
@@ -661,45 +662,6 @@ button:disabled { opacity: .45; cursor: default; }
 .tl-bubble.show { opacity: 1; }
 .tl-bubble.a { color: var(--a); text-shadow: 0 0 6px rgba(127,240,192,.6); }
 .tl-bubble.b { color: var(--b); text-shadow: 0 0 6px rgba(255,138,115,.6); }
-.tl-handle {
-  position: absolute; top: -12px; bottom: -12px;
-  width: 44px; margin-left: -22px; left: 0;
-  cursor: grab;
-}
-.tl-handle:active { cursor: grabbing; }
-/* 位置そのものを示す縦線。つまみの下（上）から始まり、文字とは重ならない */
-.tl-handle::before {
-  content: "";
-  position: absolute; left: 50%;
-  width: 2px; margin-left: -1px;
-  border-radius: 1px;
-}
-.tl-handle.a::before { top: 20px; bottom: 0; background: var(--a); box-shadow: 0 0 6px rgba(127,240,192,.7); }
-.tl-handle.b::before { top: 0; bottom: 20px; background: var(--b); box-shadow: 0 0 6px rgba(255,138,115,.7); }
-/* つまみ：A はトラックの上、B はトラックの下。小さな三角で線を指す */
-.tl-handle span {
-  position: absolute; left: 50%;
-  transform: translateX(-50%);
-  width: 26px; height: 18px;
-  display: grid; place-items: center;
-  border-radius: 4px;
-  font-family: var(--font-cond);
-  font-weight: 800;
-  font-size: 12px;
-  line-height: 1;
-  color: var(--ink);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 1px 3px rgba(0,0,0,.7);
-}
-.tl-handle span::after {
-  content: "";
-  position: absolute; left: 50%; margin-left: -4px;
-  border: 4px solid transparent;
-}
-.tl-handle.a span { top: 0; background: linear-gradient(180deg, #c9fff0, var(--a)); }
-.tl-handle.a span::after { top: 100%; border-top-color: var(--a); }
-.tl-handle.b span { bottom: 0; background: linear-gradient(180deg, var(--b), #d6614e); }
-.tl-handle.b span::after { bottom: 100%; border-bottom-color: var(--b); }
-
 /* ルーペ帯：A–B 区間の拡大表示 */
 .loupe {
   margin: 2px 0 6px;
@@ -986,8 +948,7 @@ button:disabled { opacity: .45; cursor: default; }
   .screen-body .video { width: auto; } /* 実寸は JS が入る高さから決める */
   .module.looper { grid-row: 2; }
   .module.looper .module-head, .module.speed .module-head { margin-bottom: 4px; }
-  .module.looper .timeline { padding-top: 28px; padding-bottom: 12px; }
-  .module.looper .tl-track { height: 44px; }
+  .module.looper .timeline { padding-top: 20px; padding-bottom: 2px; }
   .looper-grid { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); grid-template-rows: auto; }
   /* A/B カード：LCD と微調整を左、SET スイッチを右に寄せて低くする */
   .looper-grid .marker {
@@ -1018,13 +979,7 @@ button:disabled { opacity: .45; cursor: default; }
   .app[data-size="large"] .foot-label, .app[data-size="full"] .foot-label { font-size: 11px; }
   .app[data-size="large"] .nudge button, .app[data-size="full"] .nudge button { height: 24px; font-size: 11px; }
   .app[data-size="large"] .time-input, .app[data-size="full"] .time-input { height: 32px; font-size: 15px; }
-  .app[data-size="large"] .timeline, .app[data-size="full"] .timeline { padding-top: 22px; padding-bottom: 10px; }
-  .app[data-size="large"] .tl-track, .app[data-size="full"] .tl-track { height: 26px; }
-  .app[data-size="large"] .tl-track::before, .app[data-size="full"] .tl-track::before { height: 10px; }
-  .app[data-size="large"] .tl-region, .app[data-size="full"] .tl-region { height: 8px; }
-  .app[data-size="large"] .tl-handle.a::before, .app[data-size="full"] .tl-handle.a::before { top: 16px; }
-  .app[data-size="large"] .tl-handle.b::before, .app[data-size="full"] .tl-handle.b::before { bottom: 16px; }
-  .app[data-size="large"] .tl-handle span, .app[data-size="full"] .tl-handle span { width: 22px; height: 14px; font-size: 10px; }
+  .app[data-size="large"] .timeline, .app[data-size="full"] .timeline { padding-top: 20px; padding-bottom: 2px; }
   .app[data-size="large"] .loupe, .app[data-size="full"] .loupe { margin: 0 0 4px; padding-top: 12px; }
   .app[data-size="large"] .loupe-track, .app[data-size="full"] .loupe-track { height: 42px; }
   .app[data-size="large"] .seek-row, .app[data-size="full"] .seek-row { margin-top: 2px; }
@@ -1108,10 +1063,8 @@ button:disabled { opacity: .45; cursor: default; }
   .foot.big .foot-cap { width: 68px; height: 68px; }
   .foot-label { font-size: 12px; }
   /* タイムラインはトラックを1段目いっぱいに、時刻は2段目へ */
-  .timeline { grid-template-columns: 1fr 1fr; row-gap: 2px; padding: 26px 0 0; }
-  .tl-track { margin-bottom: 12px; }
-  .tl-track { height: 44px; }
-  .tl-track { grid-column: 1 / -1; grid-row: 1; margin: 0 14px; } /* 端のハンドルが面からはみ出ないように */
+  .timeline { grid-template-columns: 1fr 1fr; row-gap: 4px; padding: 20px 0 0; }
+  .tl-track { grid-column: 1 / -1; grid-row: 1; }
   #curTime { grid-row: 2; justify-self: start; }
   #durTime { grid-row: 2; justify-self: end; }
   .lcd.time { font-size: 13px; padding: 3px 7px; }
@@ -1153,8 +1106,8 @@ button:disabled { opacity: .45; cursor: default; }
 .app[data-theater="1"] .module.looper { padding: 6px 14px 10px; grid-row: 2; }
 .app[data-theater="1"] .module.looper .module-head { margin-bottom: 2px; }
 .app[data-theater="1"] .module.looper h2 { font-size: 15px; }
-.app[data-theater="1"] .module.looper .timeline { padding: 24px 0 10px; grid-template-columns: auto 1fr auto; row-gap: 0; }
-.app[data-theater="1"] .module.looper .tl-track { grid-column: auto; grid-row: auto; height: 36px; margin: 0; }
+.app[data-theater="1"] .module.looper .timeline { padding: 18px 0 2px; grid-template-columns: auto 1fr auto; row-gap: 0; }
+.app[data-theater="1"] .module.looper .tl-track { grid-column: auto; grid-row: auto; margin: 0; }
 .app[data-theater="1"] #curTime, .app[data-theater="1"] #durTime { grid-row: auto; font-size: 13px; padding: 3px 8px; }
 .app[data-theater="1"] .seek-row { margin-top: 2px; }
 .app[data-theater="1"] .loupe { margin: 0 0 4px; padding-top: 12px; }
@@ -1203,9 +1156,6 @@ button:disabled { opacity: .45; cursor: default; }
   .app[data-theater="1"] .module.looper .module-head { margin: 0; }
   .app[data-theater="1"] .module.looper .timeline { padding-top: 16px; }
   .app[data-theater="1"] .module.looper .tl-track { height: 28px; }
-  .app[data-theater="1"] .tl-handle span { width: 22px; height: 15px; font-size: 11px; }
-  .app[data-theater="1"] .tl-handle.a::before { top: 17px; }
-  .app[data-theater="1"] .tl-handle.b::before { bottom: 17px; }
   .app[data-theater="1"] .nudge { display: none; }
   .app[data-theater="1"] .seek-row { display: none; }
   .app[data-theater="1"] .loupe-track { height: 40px; }
