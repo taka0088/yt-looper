@@ -58,18 +58,20 @@ button, .tl-track, .loupe-track, .loupe-handle, .knob, .rates, .shield, .foot, .
 
 /* ================= 共通パーツ ================= */
 
-/* 小ボタン：ピアノブラックの光沢（案3+4+）。上からの滑らかな反射＋下端の照り返し、境目のある帯は無し */
+/* 小ボタン：ガラス玉風（案4 / E）。上端に境目のある映り込み帯＋下端からの強い照り返し */
 .metal-btn, .btn-group button, .nudge button, .panel-foot button, .loader button, .seek-group button, .mini-speed button, .clear-btn {
   background:
-    linear-gradient(180deg, rgba(255,255,255,.50) 0%, rgba(255,255,255,.26) 28%, rgba(255,255,255,.06) 52%, rgba(255,255,255,0) 66%),
-    radial-gradient(95% 58% at 50% 120%, rgba(255,255,255,.52), rgba(255,255,255,.14) 45%, rgba(255,255,255,0) 72%),
-    linear-gradient(180deg, #2a2b2f, #101114 50%, #060708);
+    linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.25) 26%, rgba(255,255,255,0) 30%),
+    radial-gradient(90% 55% at 50% 118%, rgba(255,255,255,.55), rgba(255,255,255,.12) 45%, rgba(255,255,255,0) 70%),
+    linear-gradient(180deg, #232427, #0e0f12 55%, #040506);
   color: #ffffff;
   border: 1px solid #000;
   border-radius: 8px;
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.75),
-    inset 0 -1px 0 rgba(255,255,255,.38),
+    inset 0 1px 0 rgba(255,255,255,.6),
+    inset 0 -1px 0 rgba(255,255,255,.14),
+    inset 1px 0 0 rgba(255,255,255,.10),
+    inset -1px 0 0 rgba(255,255,255,.10),
     0 1px 2px rgba(0,0,0,.95),
     0 3px 6px rgba(0,0,0,.55);
   font-weight: 700;
