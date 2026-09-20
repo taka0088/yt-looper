@@ -649,7 +649,7 @@ function refreshMeta() {
   const data = p.getVideoData?.();
   if (data?.title && data.title !== state.title) {
     state.title = data.title;
-    document.title = `${state.title} — ループ練習`;
+    document.title = `${state.title} — YT LOOPER`;
     rememberRecent(state.videoId, state.title);
   }
 }

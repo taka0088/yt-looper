@@ -1,6 +1,6 @@
 {
-  "name": "ループ練習",
-  "short_name": "ループ練習",
+  "name": "YT LOOPER",
+  "short_name": "YT LOOPER",
   "description": "YouTube の好きな区間を繰り返し、速度を変えて練習する",
   "start_url": "./",
   "scope": "./",

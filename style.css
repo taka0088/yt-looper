@@ -965,8 +965,7 @@ button:disabled { opacity: .45; cursor: default; }
     padding: 12px 16px 14px;
   }
   .rail-top { grid-area: rail; grid-template-columns: 1fr; gap: 8px; padding: 10px 12px; }
-  .rail-top .logo { justify-content: space-between; }
-  .logo-mark { font-size: 24px; }
+  .logo-mark { font-size: 26px; }
   .presets { grid-area: presets; min-height: 0; overflow: auto; }
   .rack.side { grid-area: side; }
 
