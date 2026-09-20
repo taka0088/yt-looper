@@ -817,17 +817,27 @@ function stepRate(dir) {
   if (next !== undefined) { setRate(next); toast(next + "×"); }
 }
 
-function setMarker(which, t) {
+// A/B を置く。相手側を飛び越えたら「区間を新しく作り直している」とみなして、相手側を端まで開く
+// （ドラッグ中の微調整では 0.2 秒の間隔だけ守る）
+function setMarker(which, t, { open = false } = {}) {
   if (!state.ready) return toast("先に動画を読み込んでください");
   t = clamp(t, 0, state.duration);
   if (which === "a") {
     state.a = t;
-    if (state.b < state.a + 0.2) state.b = clamp(state.a + 0.2, 0, state.duration);
+    if (state.b < state.a + 0.2) state.b = open ? state.duration : clamp(state.a + 0.2, 0, state.duration);
   } else {
     state.b = t;
-    if (state.a > state.b - 0.2) state.a = clamp(state.b - 0.2, 0, state.duration);
+    if (state.a > state.b - 0.2) state.a = open ? 0 : clamp(state.b - 0.2, 0, state.duration);
   }
   renderMarkers();
+}
+
+function clearMarkers() {
+  if (!state.ready) return;
+  state.a = 0; state.b = state.duration;
+  state.loupe.frozen = false;
+  renderMarkers();
+  toast("A–B を解除しました");
 }
 
 function toggleLoop(force) {
@@ -882,8 +892,9 @@ el.input.addEventListener("paste", () => {
   }, 0);
 });
 
-el.setA.addEventListener("click", () => setMarker("a", currentTime()));
-el.setB.addEventListener("click", () => setMarker("b", currentTime()));
+el.setA.addEventListener("click", () => setMarker("a", currentTime(), { open: true }));
+el.setB.addEventListener("click", () => setMarker("b", currentTime(), { open: true }));
+$("#clearAB").addEventListener("click", clearMarkers);
 document.querySelectorAll(".nudge").forEach((wrap) => {
   const which = wrap.dataset.marker;
   wrap.querySelectorAll("button").forEach((b) => {
@@ -1111,7 +1122,7 @@ for (const [input, which] of [[el.timeA, "a"], [el.timeB, "b"]]) {
     const t = parseTime(input.value);
     if (t === null) { toast("「1:23.4」のように 分:秒 で入力してください"); input.value = fmt(state[which]); return; }
     if (t > state.duration) { toast("動画の長さを超えています"); input.value = fmt(state[which]); return; }
-    setMarker(which, t);
+    setMarker(which, t, { open: true });
     seek(state[which]);
   });
 }
@@ -1151,8 +1162,9 @@ document.addEventListener("keydown", (e) => {
   const key = e.code === "Space" ? " " : e.key;
   switch (key) {
     case " ": e.preventDefault(); togglePlay(); break;
-    case "a": case "A": setMarker("a", currentTime()); toast("A点 " + fmt(state.a)); break;
-    case "b": case "B": setMarker("b", currentTime()); toast("B点 " + fmt(state.b)); break;
+    case "a": case "A": setMarker("a", currentTime(), { open: true }); toast("A点 " + fmt(state.a)); break;
+    case "b": case "B": setMarker("b", currentTime(), { open: true }); toast("B点 " + fmt(state.b)); break;
+    case "c": case "C": clearMarkers(); break;
     case "l": case "L": toggleLoop(); break;
     case "Enter": seek(state.a); break;
     case "ArrowLeft": e.preventDefault(); seek(currentTime() - (e.shiftKey ? 5 : 1)); break;
