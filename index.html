@@ -74,6 +74,23 @@
 
       <details class="settings">
         <summary>設定</summary>
+        <div class="settings-toggles">
+          <label class="toggle">
+            <input type="checkbox" id="hidePaused" checked>
+            <span class="sw"></span>
+            <span class="toggle-label">停止中は YouTube の表示を隠す</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="countIn">
+            <span class="sw"></span>
+            <span class="toggle-label">再生前に 3 カウント</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="showCaptions">
+            <span class="sw"></span>
+            <span class="toggle-label">字幕を表示する</span>
+          </label>
+        </div>
         <label class="settings-row">
           <span>YouTube Data API キー</span>
           <input id="apiKeyInput2" type="text" autocomplete="off" spellcheck="false" placeholder="未設定">
@@ -100,17 +117,6 @@
     <section class="rack">
 
       <article class="module screen">
-        <header class="module-head">
-          <h2>Screen</h2>
-          <div class="module-tools">
-            <div class="btn-group zoom" role="group" aria-label="拡大">
-              <button type="button" id="zoomOut" aria-label="縮小">−</button>
-              <span class="lcd small" id="zoomLabel">1.0×</span>
-              <button type="button" id="zoomIn" aria-label="拡大">＋</button>
-              <button type="button" id="zoomReset">Reset</button>
-            </div>
-          </div>
-        </header>
         <div class="screen-body" id="screenBody">
         <div class="video">
           <div class="video-frame" id="videoFrame">
@@ -134,29 +140,19 @@
           </div>
         </div>
         </div>
-        <footer class="module-foot">
-          <label class="toggle">
-            <input type="checkbox" id="hidePaused" checked>
-            <span class="sw"></span>
-            <span class="toggle-label">停止中は YouTube の表示を隠す</span>
-          </label>
-          <label class="toggle">
-            <input type="checkbox" id="countIn">
-            <span class="sw"></span>
-            <span class="toggle-label">再生前に 3 カウント</span>
-          </label>
-          <label class="toggle">
-            <input type="checkbox" id="showCaptions">
-            <span class="sw"></span>
-            <span class="toggle-label">字幕</span>
-          </label>
-        </footer>
       </article>
 
       <article class="module looper">
         <header class="module-head">
           <h2>Looper</h2>
           <div class="looper-head-right">
+            <div class="btn-group zoom" role="group" aria-label="拡大">
+              <span class="led-label">Zoom</span>
+              <button type="button" id="zoomOut" aria-label="縮小">−</button>
+              <span class="lcd small" id="zoomLabel">1.0×</span>
+              <button type="button" id="zoomIn" aria-label="拡大">＋</button>
+              <button type="button" id="zoomReset">Reset</button>
+            </div>
             <div class="mini-speed" role="group" aria-label="再生速度">
               <span class="led-label">Speed</span>
               <button type="button" id="rateDown" aria-label="速度を下げる">−</button>

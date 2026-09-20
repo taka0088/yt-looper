@@ -467,7 +467,7 @@ button:disabled { opacity: .45; cursor: default; }
 .module-foot { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 12px; }
 
 /* ---- SCREEN ---- */
-.module.screen { --face: linear-gradient(180deg, #454850, #35383e); color: var(--text); }
+.module.screen { --face: linear-gradient(180deg, #454850, #35383e); color: var(--text); padding: 10px; }
 .screen-body { min-height: 0; display: grid; place-items: center; }
 .screen-body .video { width: 100%; }
 .video {
@@ -561,6 +561,8 @@ button:disabled { opacity: .45; cursor: default; }
 .corner-btn[aria-pressed="true"] { color: var(--amber); border-color: var(--amber); }
 
 .looper-head-right { display: flex; align-items: center; gap: 18px; }
+.looper-head-right .btn-group.zoom { gap: 6px; }
+.looper-head-right .btn-group.zoom .led-label { margin-right: 2px; }
 .mini-speed { display: none; align-items: center; gap: 6px; }
 .mini-speed button {
   width: 30px; height: 28px;
@@ -949,19 +951,22 @@ button:disabled { opacity: .45; cursor: default; }
 
 /* ================= デスクトップ：1画面に収める ================= */
 @media (min-width: 900px) {
+  /* ロゴと URL 欄は左列に収め、ラックは画面の上端から使う（動画を最大にするため） */
   .app {
     height: 100dvh;
     grid-template-columns: 300px minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas:
-      "rail rail"
+      "rail rack"
       "presets rack"
       "side rack";
     column-gap: 14px;
     row-gap: 12px;
     padding: 12px 16px 14px;
   }
-  .rail-top { grid-area: rail; grid-template-columns: auto 1fr; align-items: center; gap: 24px; }
+  .rail-top { grid-area: rail; grid-template-columns: 1fr; gap: 8px; padding: 10px 12px; }
+  .rail-top .logo { justify-content: space-between; }
+  .logo-mark { font-size: 24px; }
   .presets { grid-area: presets; min-height: 0; overflow: auto; }
   .rack.side { grid-area: side; }
 
@@ -971,8 +976,8 @@ button:disabled { opacity: .45; cursor: default; }
     min-height: 0;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto;
-    gap: 10px 12px;
-    padding: 10px 26px;
+    gap: 8px 12px;
+    padding: 8px 26px;
   }
   .rack.side { grid-template-rows: auto; }
   .module.screen { grid-column: 1 / -1; display: flex; flex-direction: column; min-height: 0; }
@@ -1009,16 +1014,26 @@ button:disabled { opacity: .45; cursor: default; }
 
   /* M：操作部をコンパクトに */
   .app[data-size="large"] .foot-cap, .app[data-size="full"] .foot-cap { width: 40px; height: 40px; }
-  .app[data-size="large"] .foot.big .foot-cap, .app[data-size="full"] .foot.big .foot-cap { width: 66px; height: 66px; }
+  .app[data-size="large"] .foot.big .foot-cap, .app[data-size="full"] .foot.big .foot-cap { width: 62px; height: 62px; }
   .app[data-size="large"] .foot.small .foot-cap, .app[data-size="full"] .foot.small .foot-cap { width: 32px; height: 32px; }
   .app[data-size="large"] .foot-label, .app[data-size="full"] .foot-label { font-size: 11px; }
   .app[data-size="large"] .nudge button, .app[data-size="full"] .nudge button { height: 24px; font-size: 11px; }
   .app[data-size="large"] .time-input, .app[data-size="full"] .time-input { height: 32px; font-size: 15px; }
-  .app[data-size="large"] .timeline, .app[data-size="full"] .timeline { padding-top: 28px; padding-bottom: 12px; }
-  .app[data-size="large"] .tl-track, .app[data-size="full"] .tl-track { height: 40px; }
+  .app[data-size="large"] .timeline, .app[data-size="full"] .timeline { padding-top: 22px; padding-bottom: 10px; }
+  .app[data-size="large"] .tl-track, .app[data-size="full"] .tl-track { height: 26px; }
+  .app[data-size="large"] .tl-track::before, .app[data-size="full"] .tl-track::before { height: 10px; }
+  .app[data-size="large"] .tl-region, .app[data-size="full"] .tl-region { height: 8px; }
+  .app[data-size="large"] .tl-handle.a::before, .app[data-size="full"] .tl-handle.a::before { top: 16px; }
+  .app[data-size="large"] .tl-handle.b::before, .app[data-size="full"] .tl-handle.b::before { bottom: 16px; }
+  .app[data-size="large"] .tl-handle span, .app[data-size="full"] .tl-handle span { width: 22px; height: 14px; font-size: 10px; }
+  .app[data-size="large"] .loupe, .app[data-size="full"] .loupe { margin: 0 0 4px; padding-top: 12px; }
+  .app[data-size="large"] .loupe-track, .app[data-size="full"] .loupe-track { height: 42px; }
+  .app[data-size="large"] .seek-row, .app[data-size="full"] .seek-row { margin-top: 2px; }
+  .app[data-size="large"] .seek-group button, .app[data-size="full"] .seek-group button { height: 22px; }
+  .app[data-size="large"] .looper-grid, .app[data-size="full"] .looper-grid { margin-top: 4px; }
   .app[data-size="large"] .module h2, .app[data-size="full"] .module h2 { font-size: 16px; }
-  .app[data-size="large"] .module, .app[data-size="full"] .module { padding: 8px 14px 12px; }
-  .app[data-size="large"] .module-head, .app[data-size="full"] .module-head { margin-bottom: 6px; }
+  .app[data-size="large"] .module.looper, .app[data-size="full"] .module.looper { padding: 6px 14px 10px; }
+  .app[data-size="large"] .module-head, .app[data-size="full"] .module-head { margin-bottom: 2px; }
   .app[data-size="large"] .marker, .app[data-size="full"] .marker { padding: 6px 8px; gap: 5px; }
   .app[data-size="large"] .rates button, .app[data-size="full"] .rates button { font-size: 12px; padding: 3px; }
   .app[data-size="large"] .module.speed .knob-wrap, .app[data-size="full"] .module.speed .knob-wrap { width: min(100%, 170px); }
@@ -1134,6 +1149,7 @@ button:disabled { opacity: .45; cursor: default; }
 .app[data-theater="1"] .screen-body { flex: 1; min-height: 0; }
 .app[data-theater="1"] .screen-body .video { width: auto; }
 .app[data-theater="1"] .mini-speed { display: flex; }
+.app[data-theater="1"] .module.screen { padding: 6px; }
 /* LOOPER を薄い1段に */
 .app[data-theater="1"] .module.looper { padding: 6px 14px 10px; grid-row: 2; }
 .app[data-theater="1"] .module.looper .module-head { margin-bottom: 2px; }
@@ -1301,6 +1317,7 @@ button:disabled { opacity: .45; cursor: default; }
 
 .settings { padding: 6px 4px 0; }
 .settings summary { color: var(--muted); cursor: pointer; font-size: 13px; }
+.settings-toggles { display: grid; gap: 8px; margin: 10px 0 12px; }
 .settings-row { display: grid; gap: 4px; margin: 8px 0; font-size: 12px; color: var(--muted); }
 .settings-row input { height: 32px; font-size: 12px; }
 .text-btn { background: transparent; border: 0; color: var(--muted); font-size: 12px; padding: 0; cursor: pointer; text-decoration: underline; }
