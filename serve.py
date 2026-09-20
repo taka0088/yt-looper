@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ループ練習のローカルサーバー。
+"""YT LOOPER のローカルサーバー。
 標準の http.server に「キャッシュしない」ヘッダーを足したもの。
 これがないと、ブラウザが古い app.js / index.html を使い回して動かなくなることがある。"""
 import sys
@@ -20,5 +20,5 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     with ThreadingHTTPServer(("0.0.0.0", PORT), Handler) as httpd:
-        print(f"ループ練習: http://localhost:{PORT}")
+        print(f"YT LOOPER: http://localhost:{PORT}")
         httpd.serve_forever()

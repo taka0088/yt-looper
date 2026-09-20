@@ -1,4 +1,4 @@
-// ループ練習 — YouTube IFrame Player API で A-B ループと速度調整をするだけのアプリ
+// YT LOOPER — YouTube IFrame Player API で A-B ループと速度調整をするだけのアプリ
 
 const $ = (s) => document.querySelector(s);
 const STORAGE_KEY = "ytlooper:v1";
