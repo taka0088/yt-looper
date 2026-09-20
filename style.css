@@ -76,19 +76,18 @@ button, .tl-track, .loupe-track, .loupe-handle, .knob, .rates, .shield, .foot, .
   text-shadow: 0 1px 1px rgba(0,0,0,.95), 0 0 3px rgba(0,0,0,.6);
   transition: transform .05s, box-shadow .05s, background .05s;
 }
-/* 押した状態：反射が消えて奥に沈む。縁の下側だけが薄く光る */
+/* 押した状態：反射が弱まり、少し沈む（黒くしすぎない） */
 .btn-group button:active, .nudge button:active, .panel-foot button:active, .loader button:active, .seek-group button:active, .mini-speed button:active, .clear-btn:active {
   background:
-    linear-gradient(180deg, rgba(0,0,0,.6) 0%, rgba(0,0,0,.25) 45%, rgba(255,255,255,.04) 100%),
-    radial-gradient(95% 50% at 50% 125%, rgba(255,255,255,.16), rgba(255,255,255,0) 60%),
-    linear-gradient(180deg, #06070a, #0f1013 60%, #14151a);
+    linear-gradient(180deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.08) 30%, rgba(255,255,255,0) 60%),
+    radial-gradient(95% 55% at 50% 122%, rgba(255,255,255,.30), rgba(255,255,255,.06) 45%, rgba(255,255,255,0) 72%),
+    linear-gradient(180deg, #1e1f23, #0d0e11 50%, #08090b);
   box-shadow:
-    inset 0 3px 7px rgba(0,0,0,.95),
-    inset 0 1px 0 rgba(0,0,0,.9),
-    inset 0 -1px 0 rgba(255,255,255,.14),
-    0 0 0 rgba(0,0,0,0);
-  transform: translateY(2px);
-  color: #d9d9d6;
+    inset 0 2px 4px rgba(0,0,0,.7),
+    inset 0 -1px 0 rgba(255,255,255,.22),
+    0 1px 1px rgba(0,0,0,.8);
+  transform: translateY(1px);
+  color: #ececea;
 }
 .btn-group button[aria-pressed="true"] {
   background: linear-gradient(180deg, #ffc65e, #e39a1f);
