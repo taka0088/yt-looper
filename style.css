@@ -61,8 +61,8 @@ button, .tl-track, .loupe-track, .loupe-handle, .knob, .rates, .shield, .foot, .
 /* 小ボタン：ガラス玉風（案4 / E）。上端に境目のある映り込み帯＋下端からの強い照り返し */
 .metal-btn, .btn-group button, .nudge button, .panel-foot button, .loader button, .seek-group button, .mini-speed button, .clear-btn {
   background:
-    linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.25) 26%, rgba(255,255,255,0) 30%),
-    radial-gradient(90% 55% at 50% 118%, rgba(255,255,255,.55), rgba(255,255,255,.12) 45%, rgba(255,255,255,0) 70%),
+    linear-gradient(180deg, rgba(255,255,255,.46) 0%, rgba(255,255,255,.20) 27%, rgba(255,255,255,.04) 31%, rgba(255,255,255,0) 40%),
+    radial-gradient(90% 55% at 50% 118%, rgba(255,255,255,.48), rgba(255,255,255,.10) 45%, rgba(255,255,255,0) 70%),
     linear-gradient(180deg, #232427, #0e0f12 55%, #040506);
   color: #ffffff;
   border: 1px solid #000;
