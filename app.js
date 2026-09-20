@@ -17,6 +17,7 @@ const state = {
   rate: 1,
   rates: DEFAULT_RATES,
   dragging: null,      // "a" | "b" | "seek"
+  loupe: { start: 0, end: 4, frozen: false }, // ルーペ帯の表示範囲（秒）
   pendingId: null,     // API 準備前に読み込み要求された ID
   playing: false,      // 直前の状態が再生中か（BUFFERING では更新しない）
   zoom: 1,             // 動画の拡大率
@@ -32,6 +33,14 @@ const el = {
   region: $("#region"),
   head: $("#head"),
   bubble: $("#bubble"),
+  loupe: $("#loupe"),
+  loupeTrack: $("#loupeTrack"),
+  loupeTicks: $("#loupeTicks"),
+  loupeRegion: $("#loupeRegion"),
+  loupeHead: $("#loupeHead"),
+  loupeBubble: $("#loupeBubble"),
+  loupeA: $("#loupeA"),
+  loupeB: $("#loupeB"),
   handleA: $("#handleA"),
   handleB: $("#handleB"),
   curTime: $("#curTime"),
@@ -187,11 +196,13 @@ function renderMarkers() {
     li.classList.toggle("active", !!lp && Math.abs(lp.a - state.a) < 0.05 && Math.abs(lp.b - state.b) < 0.05);
   });
   el.durTime.textContent = fmt(state.duration);
+  renderLoupe();
 }
 
 function renderHead(t) {
   el.head.style.left = pct(t) + "%";
   el.curTime.textContent = fmt(t);
+  renderLoupeHead(t);
 }
 
 function renderLoop() {
@@ -323,6 +334,136 @@ function fmtDate(ts) {
   if (d.toDateString() === y.toDateString()) return "昨日";
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
+
+// ---------- ルーペ帯：A–B の前後を横幅いっぱいに拡大 ----------
+
+const LOUPE_MIN_SPAN = 3; // 最低でも 3 秒分は見せる
+let loupeTickKey = "";
+
+function fitLoupe() {
+  if (state.loupe.frozen || !state.ready) return;
+  const len = Math.max(0, state.b - state.a);
+  const pad = Math.max(0.5, len * 0.3);
+  let start = state.a - pad, end = state.b + pad;
+  if (end - start < LOUPE_MIN_SPAN) {
+    const mid = (state.a + state.b) / 2;
+    start = mid - LOUPE_MIN_SPAN / 2; end = mid + LOUPE_MIN_SPAN / 2;
+  }
+  const span = end - start;
+  if (start < 0) { start = 0; end = Math.min(state.duration, span); }
+  if (end > state.duration) { end = state.duration; start = Math.max(0, end - span); }
+  state.loupe.start = start; state.loupe.end = end;
+}
+
+function loupePct(t) {
+  const { start, end } = state.loupe;
+  return end > start ? clamp((t - start) / (end - start), 0, 1) * 100 : 0;
+}
+function loupeTimeAt(clientX) {
+  const r = el.loupeTrack.getBoundingClientRect();
+  const { start, end } = state.loupe;
+  return start + clamp((clientX - r.left) / r.width, 0, 1) * (end - start);
+}
+
+function renderLoupe() {
+  if (!state.ready) { el.loupe.classList.add("empty"); return; }
+  el.loupe.classList.remove("empty");
+  fitLoupe();
+  const a = loupePct(state.a), b = loupePct(state.b);
+  el.loupeRegion.style.left = a + "%";
+  el.loupeRegion.style.width = Math.max(0, b - a) + "%";
+  el.loupeA.style.left = a + "%";
+  el.loupeB.style.left = b + "%";
+  el.loupeA.setAttribute("aria-valuetext", fmt(state.a));
+  el.loupeB.setAttribute("aria-valuetext", fmt(state.b));
+  renderLoupeTicks();
+}
+
+// 目盛り：表示範囲の長さで刻みを変える
+function renderLoupeTicks() {
+  const { start, end } = state.loupe;
+  const span = end - start;
+  const [major, minor] = span <= 4 ? [0.5, 0.1] : span <= 10 ? [1, 0.5] : span <= 30 ? [5, 1] : [10, 5];
+  const key = `${start.toFixed(2)}|${end.toFixed(2)}|${el.loupeTrack.clientWidth}`;
+  if (key === loupeTickKey) return;
+  loupeTickKey = key;
+  el.loupeTicks.innerHTML = "";
+  const first = Math.ceil(start / minor) * minor;
+  const decimals = major < 1 ? 1 : 0;
+  for (let t = first; t <= end + 1e-6; t = Math.round((t + minor) * 1000) / 1000) {
+    const isMajor = Math.abs(t / major - Math.round(t / major)) < 1e-6;
+    const el2 = document.createElement("span");
+    el2.className = "tick" + (isMajor ? " major" : "");
+    el2.style.left = loupePct(t) + "%";
+    if (isMajor) {
+      const m = Math.floor(t / 60), s = t - m * 60;
+      el2.dataset.label = `${m}:${s < 10 ? "0" : ""}${s.toFixed(decimals)}`;
+    }
+    el.loupeTicks.appendChild(el2);
+  }
+}
+
+function renderLoupeHead(t) {
+  const { start, end } = state.loupe;
+  const inside = t >= start && t <= end;
+  el.loupeHead.style.display = inside ? "" : "none";
+  if (inside) el.loupeHead.style.left = loupePct(t) + "%";
+}
+
+function showLoupeBubble(which, t) {
+  el.loupeBubble.textContent = fmt(t);
+  el.loupeBubble.style.left = loupePct(t) + "%";
+  el.loupeBubble.className = "tl-bubble show" + (which === "a" || which === "b" ? " " + which : "");
+}
+
+// ドラッグ：ハンドルは A/B を動かす、空いた所は頭出し。ドラッグ中は範囲を固定する
+{
+  let drag = null; // { which, offset }
+  el.loupeTrack.addEventListener("pointerdown", (e) => {
+    if (!state.ready) return;
+    const handle = e.target.closest(".loupe-handle");
+    const t = loupeTimeAt(e.clientX);
+    state.loupe.frozen = true;
+    if (handle) {
+      drag = { which: handle.dataset.marker, offset: state[handle.dataset.marker] - t };
+      showLoupeBubble(drag.which, state[drag.which]);
+    } else {
+      drag = { which: "seek", offset: 0 };
+      state.dragging = "seek"; // メイン側の tick で再生位置を上書きしないように
+      renderHead(t);
+      showLoupeBubble("seek", t);
+    }
+    try { el.loupeTrack.setPointerCapture(e.pointerId); } catch {}
+  });
+  el.loupeTrack.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const t = loupeTimeAt(e.clientX);
+    if (drag.which === "seek") { renderHead(t); showLoupeBubble("seek", t); }
+    else { setMarker(drag.which, t + drag.offset); showLoupeBubble(drag.which, state[drag.which]); }
+  });
+  const end = (e) => {
+    if (!drag) return;
+    const t = loupeTimeAt(e.clientX);
+    if (drag.which === "seek") { state.dragging = null; seek(t); }
+    else seek(state[drag.which]);
+    drag = null;
+    state.loupe.frozen = false;
+    el.loupeBubble.classList.remove("show");
+    renderMarkers();
+  };
+  el.loupeTrack.addEventListener("pointerup", end);
+  el.loupeTrack.addEventListener("pointercancel", (e) => { drag = null; state.dragging = null; state.loupe.frozen = false; el.loupeBubble.classList.remove("show"); });
+
+  // キーボードで 0.1 秒（Shift で 1 秒）
+  for (const hd of [el.loupeA, el.loupeB]) {
+    hd.addEventListener("keydown", (e) => {
+      const step = e.shiftKey ? 1 : 0.1;
+      if (e.key === "ArrowLeft") { setMarker(hd.dataset.marker, state[hd.dataset.marker] - step); e.preventDefault(); }
+      if (e.key === "ArrowRight") { setMarker(hd.dataset.marker, state[hd.dataset.marker] + step); e.preventDefault(); }
+    });
+  }
+}
+window.addEventListener("resize", () => { loupeTickKey = ""; renderLoupe(); });
 
 // ---------- 表示サイズと拡大 ----------
 
@@ -459,6 +600,7 @@ function loadVideo(id, start = 0) {
   state.title = "";
   state.duration = 0;
   state.a = 0; state.b = 0;
+  state.loupe.frozen = false; loupeTickKey = "";
   el.video.classList.add("has-video");
   restoreView(id);
   renderShield(YT.PlayerState.CUED);
@@ -1025,7 +1167,7 @@ for (const h of [el.handleA, el.handleB]) {
 document.addEventListener("keydown", (e) => {
   const tag = document.activeElement?.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || e.metaKey || e.ctrlKey || e.altKey) return;
-  if ((document.activeElement?.classList.contains("tl-handle") || document.activeElement === el.knob) && e.key.startsWith("Arrow")) return;
+  if ((document.activeElement?.classList.contains("tl-handle") || document.activeElement?.classList.contains("loupe-handle") || document.activeElement === el.knob) && e.key.startsWith("Arrow")) return;
   const key = e.code === "Space" ? " " : e.key;
   switch (key) {
     case " ": e.preventDefault(); togglePlay(); break;

@@ -178,6 +178,17 @@
           <div class="lcd time" id="durTime">0:00.0</div>
         </div>
 
+        <div class="loupe" id="loupe" aria-label="A–B 区間の拡大表示">
+          <div class="loupe-track" id="loupeTrack">
+            <div class="loupe-ticks" id="loupeTicks"></div>
+            <div class="loupe-region" id="loupeRegion"></div>
+            <div class="loupe-head" id="loupeHead"></div>
+            <div class="tl-bubble" id="loupeBubble" aria-hidden="true"></div>
+            <div class="loupe-handle a" id="loupeA" data-marker="a" role="slider" tabindex="0" aria-label="A点（拡大）"><span>A</span></div>
+            <div class="loupe-handle b" id="loupeB" data-marker="b" role="slider" tabindex="0" aria-label="B点（拡大）"><span>B</span></div>
+          </div>
+        </div>
+
         <div class="seek-row" role="group" aria-label="巻き戻し・早送り">
           <span class="led-label">Seek</span>
           <div class="seek-group back" id="seekBack"></div>
