@@ -58,33 +58,27 @@ button, .tl-track, .loupe-track, .loupe-handle, .knob, .rates, .shield, .foot, .
 
 /* ================= 共通パーツ ================= */
 
-/* 小ボタン：ピアノブラックの光沢。上半分にはっきりした映り込み、下端に反射、縁に光のライン */
+/* 小ボタン：ピアノブラックの光沢。文字にかからない上端の映り込み帯＋下端の照り返し＋縁の光 */
 .metal-btn, .btn-group button, .nudge button, .panel-foot button, .loader button, .seek-group button, .mini-speed button, .clear-btn {
-  position: relative;
   background:
-    linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.22) 40%, rgba(255,255,255,.04) 50%, rgba(255,255,255,0) 52%),
-    radial-gradient(140% 90% at 50% 135%, rgba(255,255,255,.22), rgba(255,255,255,0) 55%),
-    linear-gradient(180deg, #2a2b30, #111215 50%, #060708);
+    /* 上端の映り込み：文字より上（高さの 30%）で切れる、はっきりした帯 */
+    linear-gradient(180deg, rgba(255,255,255,.50) 0%, rgba(255,255,255,.26) 22%, rgba(255,255,255,.10) 30%, rgba(255,255,255,0) 31%),
+    /* 下端の照り返し */
+    radial-gradient(120% 60% at 50% 125%, rgba(255,255,255,.20), rgba(255,255,255,0) 60%),
+    /* 黒の本体 */
+    linear-gradient(180deg, #262729, #101114 55%, #050607);
   color: #ffffff;
   border: 1px solid #000;
   border-radius: 6px;
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.55),
-    inset 0 -1px 0 rgba(255,255,255,.12),
+    inset 0 1px 0 rgba(255,255,255,.6),
+    inset 0 -1px 0 rgba(255,255,255,.14),
     inset 1px 0 0 rgba(255,255,255,.10),
     inset -1px 0 0 rgba(255,255,255,.10),
     0 1px 2px rgba(0,0,0,.95),
     0 3px 6px rgba(0,0,0,.55);
   font-weight: 700;
   text-shadow: 0 1px 1px rgba(0,0,0,.95), 0 0 3px rgba(0,0,0,.6);
-  overflow: hidden;
-}
-/* 斜めの反射光（ガラスの筋） */
-.metal-btn::after, .btn-group button::after, .nudge button::after, .panel-foot button::after, .loader button::after, .seek-group button::after, .mini-speed button::after, .clear-btn::after {
-  content: "";
-  position: absolute; inset: 0;
-  background: linear-gradient(115deg, rgba(255,255,255,0) 30%, rgba(255,255,255,.16) 46%, rgba(255,255,255,.28) 50%, rgba(255,255,255,.14) 54%, rgba(255,255,255,0) 70%);
-  pointer-events: none;
 }
 .btn-group button:active, .nudge button:active, .panel-foot button:active, .loader button:active, .seek-group button:active, .mini-speed button:active, .clear-btn:active {
   background:
@@ -93,7 +87,6 @@ button, .tl-track, .loupe-track, .loupe-handle, .knob, .rates, .shield, .foot, .
   box-shadow: inset 0 2px 6px rgba(0,0,0,.95), inset 0 -1px 0 rgba(255,255,255,.05), 0 1px 1px rgba(0,0,0,.8);
   transform: translateY(1px);
 }
-.btn-group button:active::after, .nudge button:active::after, .panel-foot button:active::after, .loader button:active::after, .seek-group button:active::after, .mini-speed button:active::after, .clear-btn:active::after { opacity: .35; }
 .btn-group button[aria-pressed="true"] {
   background: linear-gradient(180deg, #ffc65e, #e39a1f);
   color: var(--ink);
