@@ -926,6 +926,10 @@ for (const ev of ["fullscreenchange", "webkitfullscreenchange"]) {
   });
 }
 window.addEventListener("resize", renderBars);
+// iPhone の Safari：ピンチでページが拡大されるのを止める（touch-action だけでは効かない場面の保険）
+for (const ev of ["gesturestart", "gesturechange", "gestureend"]) {
+  document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+}
 
 // SPEED パネル：LOOPER の SPEED ボタンで開閉。外側タップ・×・Esc で閉じる
 function isSpeedOpen() { return !el.speedPop.hidden; }
