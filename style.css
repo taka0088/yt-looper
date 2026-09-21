@@ -45,12 +45,13 @@ body::before {
   content: "";
   position: fixed; top: 0; left: 0; right: 0;
   height: env(safe-area-inset-top, 0px);
-  background: var(--rack);
+  /* ガラスは下地を少し明るく見せるので、下地を画面より暗い黒にして、見た目の明るさを画面と揃える */
+  background: #000;
   z-index: 2000;
   pointer-events: none;
 }
 @media (display-mode: standalone) and (max-width: 520px) {
-  .app { padding-top: 44px; } /* 帯のガラスは下端の外側まで映し込むので、ヘッダーをその範囲より下に置く */
+  .app { padding-top: 16px; }
 }
 body {
   background: var(--rack);
