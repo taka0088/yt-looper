@@ -1273,3 +1273,32 @@ renderBars();
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
 }
+
+// iPhone のホーム画面から起動したとき（standalone）、WebKit が最初の描画を低い解像度のまま
+// 保持して文字がにじむことがある。再描画さえ走れば直るので、起動直後に何度か軽く促す。
+// transform は position: fixed の基準がずれて全画面やモーダルが一瞬動くので使わず、opacity だけ触る。
+(() => {
+  const standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+    || navigator.standalone === true;
+  if (!standalone) return; // Safari のタブでは起きないので何もしない
+
+  const repaint = () => {
+    document.body.style.opacity = "0.9999";
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.body.style.opacity = "";
+      if (window.scrollY === 0) { window.scrollTo(0, 1); window.scrollTo(0, 0); }
+    }));
+  };
+  const onVisible = () => { if (document.visibilityState === "visible") repaint(); };
+
+  // 重い初期化（プレーヤー生成など）の後にも効くように、時間をずらして 3 回
+  const timers = [100, 700, 1800].map((ms) => setTimeout(repaint, ms));
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("pageshow", repaint);
+
+  window.addEventListener("pagehide", () => {
+    timers.forEach(clearTimeout);
+    document.removeEventListener("visibilitychange", onVisible);
+    window.removeEventListener("pageshow", repaint);
+  }, { once: true });
+})();
