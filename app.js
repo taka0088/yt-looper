@@ -1161,7 +1161,7 @@ async function searchVideos(q) {
   el.searchSetup.hidden = true;
   el.searchStatus.textContent = `「${q}」を検索中…`;
   try {
-    const sp = new URLSearchParams({ part: "snippet", type: "video", videoEmbeddable: "true", maxResults: "12", q, key });
+    const sp = new URLSearchParams({ part: "snippet", type: "video", videoEmbeddable: "true", maxResults: "50", q, key });
     const r = await fetch("https://www.googleapis.com/youtube/v3/search?" + sp);
     const data = await r.json();
     if (!r.ok) throw Object.assign(new Error(data.error?.message || r.statusText), { code: r.status, reason: data.error?.errors?.[0]?.reason });
