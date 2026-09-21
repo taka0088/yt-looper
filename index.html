@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&display=swap" rel="stylesheet">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="https://cdn.jsdelivr.net/npm/dseg@0.46.0/fonts/DSEG7-Classic/DSEG7Classic-Bold.woff2">
-  <link rel="stylesheet" href="style.css?v=20260921-1445">
+  <link rel="stylesheet" href="style.css?v=20260921-1450">
 </head>
 <body>
   <main class="app" data-size="large">
@@ -100,7 +100,7 @@
           <input id="apiKeyInput2" type="text" autocomplete="off" spellcheck="false" placeholder="未設定">
         </label>
         <button type="button" id="apiKeyClear" class="text-btn">キーを削除</button>
-        <p class="build">build 20260921-1445</p>
+        <p class="build">build 20260921-1450</p>
       </details>
 
       <details class="keys">
@@ -227,39 +227,40 @@
 
     </section>
 
+
+    <!-- SPEED：Mac では左列のラックにそのまま並ぶ。スマホでは LOOPER の SPEED ボタンで引き出したように出てくる -->
+    <div class="speed-pop" id="speedPop" hidden>
+      <div class="speed-pop-backdrop" id="speedPopBackdrop"></div>
+      <section class="rack pulled" role="dialog" aria-modal="true" aria-label="再生速度">
+        <article class="module speed">
+          <header class="module-head">
+            <h2>Speed</h2>
+            <span class="lcd small" id="rateLabel">1×</span>
+            <button type="button" class="speed-close" id="speedClose" aria-label="閉じる">×</button>
+          </header>
+          <div class="knob-wrap">
+            <div class="knob" id="speedKnob" role="slider" tabindex="0" aria-label="再生速度" aria-valuemin="0.25" aria-valuemax="2" aria-valuenow="1">
+              <svg viewBox="0 0 200 200" aria-hidden="true">
+                <circle class="knob-ring" cx="100" cy="100" r="86"/>
+                <g class="knob-ticks" id="knobTicks"></g>
+                <g class="knob-body" id="knobBody">
+                  <circle class="knob-base" cx="100" cy="100" r="62"/>
+                  <path class="knob-chicken" d="M100 22 L118 78 A34 34 0 1 1 82 78 Z"/>
+                  <rect class="knob-line" x="98" y="30" width="4" height="34" rx="2"/>
+                </g>
+              </svg>
+            </div>
+            <div class="rates" id="rates"></div>
+          </div>
+        </article>
+      </section>
+    </div>
   </main>
 
-  <!-- SPEED：LOOPER の SPEED ボタンで、ラックから引き出したように出てくる -->
-  <div class="speed-pop" id="speedPop" hidden>
-    <div class="speed-pop-backdrop" id="speedPopBackdrop"></div>
-    <section class="rack pulled" role="dialog" aria-modal="true" aria-label="再生速度">
-      <article class="module speed">
-        <header class="module-head">
-          <h2>Speed</h2>
-          <span class="lcd small" id="rateLabel">1×</span>
-          <button type="button" class="speed-close" id="speedClose" aria-label="閉じる">×</button>
-        </header>
-        <div class="knob-wrap">
-          <div class="knob" id="speedKnob" role="slider" tabindex="0" aria-label="再生速度" aria-valuemin="0.25" aria-valuemax="2" aria-valuenow="1">
-            <svg viewBox="0 0 200 200" aria-hidden="true">
-              <circle class="knob-ring" cx="100" cy="100" r="86"/>
-              <g class="knob-ticks" id="knobTicks"></g>
-              <g class="knob-body" id="knobBody">
-                <circle class="knob-base" cx="100" cy="100" r="62"/>
-                <path class="knob-chicken" d="M100 22 L118 78 A34 34 0 1 1 82 78 Z"/>
-                <rect class="knob-line" x="98" y="30" width="4" height="34" rx="2"/>
-              </g>
-            </svg>
-          </div>
-          <div class="rates" id="rates"></div>
-        </div>
-      </article>
-    </section>
-  </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="https://www.youtube.com/iframe_api"></script>
-  <script src="app.js?v=20260921-1445"></script>
+  <script src="app.js?v=20260921-1450"></script>
 </body>
 </html>

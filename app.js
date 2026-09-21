@@ -930,6 +930,7 @@ window.addEventListener("resize", renderBars);
 // SPEED パネル：LOOPER の SPEED ボタンで開閉。外側タップ・×・Esc で閉じる
 function isSpeedOpen() { return !el.speedPop.hidden; }
 function setSpeedOpen(on) {
+  if (getComputedStyle(el.speedBtn).display === "none") return; // Mac ではラックに常設なので開閉しない
   el.speedPop.hidden = !on;
   el.speedBtn.setAttribute("aria-expanded", String(on));
   if (on) el.knob.focus({ preventScroll: true });
