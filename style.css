@@ -50,7 +50,7 @@ body::before {
   pointer-events: none;
 }
 @media (display-mode: standalone) and (max-width: 520px) {
-  .app { padding-top: 24px; }
+  .app { padding-top: 44px; } /* 帯のガラスは下端の外側まで映し込むので、ヘッダーをその範囲より下に置く */
 }
 body {
   background: var(--rack);
