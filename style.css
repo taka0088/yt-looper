@@ -1213,7 +1213,9 @@ button:disabled { opacity: .45; cursor: default; }
 .app[data-theater="1"] .foot.small .foot-cap { width: 30px; height: 30px; }
 .app[data-theater="1"] .foot-label { font-size: 10px; }
 .app[data-theater="1"] .foot { gap: 4px; }
-.app[data-theater="1"] .transport { gap: 6px; }
+/* スイッチの銀の縁（影の 7px）とランプの縁（3px）は箱の外に描かれるので、箱の間を 10px 以上空ける */
+.app[data-theater="1"] .foot .led { margin-bottom: 12px; }
+.app[data-theater="1"] .transport { gap: 6px; padding-top: 12px; }
 .app[data-theater="1"] .time-input { height: 30px; font-size: 14px; }
 .app[data-theater="1"] .nudge button { height: 24px; font-size: 11px; }
 .app[data-theater="1"] .cap { width: 24px; height: 24px; font-size: 13px; }
