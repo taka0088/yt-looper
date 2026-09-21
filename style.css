@@ -39,7 +39,8 @@
 html, body { margin: 0; min-height: 100%; }
 /* スマホ：2 本指でページ全体が拡大されないように（縦スクロールだけ許可。ダブルタップ拡大も無効） */
 html { touch-action: pan-y; background: var(--rack); }
-/* iPhone：時計・電池の帯の裏に画面の中身が透けてぼやけないよう、帯の高さぶんを無地で塗っておく */
+/* iPhone：時計・電池の帯はガラス風に下の中身をぼかして映すので、帯の裏とそのすぐ下を
+   同じ無地の色にしておく（明るいヘッダーが帯の中ににじまないよう、ヘッダーは少し下げる） */
 body::before {
   content: "";
   position: fixed; top: 0; left: 0; right: 0;
@@ -47,6 +48,9 @@ body::before {
   background: var(--rack);
   z-index: 2000;
   pointer-events: none;
+}
+@media (display-mode: standalone) and (max-width: 520px) {
+  .app { padding-top: 24px; }
 }
 body {
   background: var(--rack);
