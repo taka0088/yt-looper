@@ -601,7 +601,7 @@ button:disabled { opacity: .45; cursor: default; }
   background: #090a08;
   font-weight: 600;
 }
-.video-empty p { max-width: 28em; margin: 0; }
+.video-empty p { max-width: 28em; margin: 0; text-wrap: balance; line-height: 1.7; }
 .video.has-video .video-empty { display: none; }
 
 /* ---- LOOPER ---- */
