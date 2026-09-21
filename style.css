@@ -207,15 +207,14 @@ button:disabled { opacity: .45; cursor: default; }
 }
 .foot.big .foot-cap { width: 80px; height: 80px; }
 .foot.small .foot-cap { width: 44px; height: 44px; }
-/* SET A/B のキャップだけ黒の削り出し（旋盤の同心円の筋＋回転の光＋上の鋭い映り込み）。
-   外周に細い銀縁を残し、外側の暗い輪と影はクロームのものと同じ。ユーザー選定（2026-09-21、案 C） */
+/* SET A/B のキャップだけ黒アルマイトのサテン仕上げ（深い黒に、上の映り込みと 4 方向の柔らかい回転の光）。
+   外周に細い銀縁を残し、外側の暗い輪と影はクロームのものと同じ。ユーザー選定（2026-09-21、案 E） */
 .foot.small .foot-cap {
   background:
-    radial-gradient(ellipse 50% 26% at 50% 20%, rgba(255,255,255,.62), rgba(255,255,255,.18) 60%, rgba(255,255,255,0) 100%),
-    radial-gradient(ellipse 60% 22% at 50% 88%, rgba(255,255,255,.14), rgba(255,255,255,0) 100%),
-    conic-gradient(from 25deg, rgba(255,255,255,.34), rgba(255,255,255,0) 14%, rgba(255,255,255,0) 36%, rgba(255,255,255,.40) 50%, rgba(255,255,255,0) 64%, rgba(255,255,255,0) 86%, rgba(255,255,255,.34)),
-    repeating-radial-gradient(circle at 50% 50%, rgba(255,255,255,.15) 0 .5px, rgba(0,0,0,0) .5px 1.5px),
-    radial-gradient(circle at 50% 50%, #26272c, #101114 66%, #050506);
+    radial-gradient(ellipse 50% 26% at 50% 20%, rgba(255,255,255,.58), rgba(255,255,255,.16) 60%, rgba(255,255,255,0) 100%),
+    radial-gradient(ellipse 60% 22% at 50% 88%, rgba(255,255,255,.12), rgba(255,255,255,0) 100%),
+    conic-gradient(from 25deg, rgba(255,255,255,.22), rgba(255,255,255,0) 12%, rgba(255,255,255,.06) 25%, rgba(255,255,255,0) 38%, rgba(255,255,255,.26) 50%, rgba(255,255,255,0) 62%, rgba(255,255,255,.06) 75%, rgba(255,255,255,0) 88%, rgba(255,255,255,.22)),
+    radial-gradient(circle at 50% 50%, #2a2b30, #121316 62%, #050506);
   box-shadow:
     inset 0 0 0 2.5px #d5d9dd, inset 0 0 0 3.5px #767c83,
     inset 0 2px 2px rgba(255,255,255,.10), inset 0 -2px 3px rgba(0,0,0,.6),
