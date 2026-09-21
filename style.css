@@ -1351,3 +1351,9 @@ html:has(.app[data-fs="1"]) { overflow: hidden; }
 
 /* 設定欄の末尾：どの版が動いているか（キャッシュ確認用） */
 .build { margin: 10px 0 0; font-size: 11px; color: #6b6f78; letter-spacing: .04em; }
+
+/* 検索欄に曲名を入れたがキーがない人向け：URL 貼り付けを先に案内し、キーの取り方は畳んでおく */
+.search-setup .paste-hint { margin: 0 0 10px; line-height: 1.6; }
+.search-setup .paste-hint strong { color: var(--amber); }
+.key-howto summary { cursor: pointer; font-size: 13px; color: #bfb9a8; padding: 4px 0; }
+.key-howto[open] summary { margin-bottom: 6px; }
