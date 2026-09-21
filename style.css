@@ -1348,3 +1348,6 @@ html:has(.app[data-fs="1"]) { overflow: hidden; }
     transform: rotate(90deg) translateY(-100%);
   }
 }
+
+/* 設定欄の末尾：どの版が動いているか（キャッシュ確認用） */
+.build { margin: 10px 0 0; font-size: 11px; color: #6b6f78; letter-spacing: .04em; }
