@@ -1313,3 +1313,22 @@ button:disabled { opacity: .45; cursor: default; }
   .search { order: 0; }
   .settings { display: block; }
 }
+
+/* シアターモードのスマホ縦持ち（シアター本体の定義より後に置いて上書きする） */
+@media (max-width: 520px) {
+  /* シアターモード（縦持ち）：動画は幅いっぱいのまま上に置き、
+     余った縦幅を灰色の余白にせず LOOPER に回す。A/B と PLAY は縦に積む */
+  .app[data-theater="1"] { height: auto; min-height: 100dvh; }
+  .app[data-theater="1"] .rack { grid-template-rows: auto minmax(0, 1fr); }
+  .app[data-theater="1"] .module.screen { flex: none; }
+  .app[data-theater="1"] .screen-body .video { width: 100%; height: auto; }
+  .app[data-theater="1"] .module.looper h2 { display: none; }
+  .app[data-theater="1"] .looper-head-right { width: 100%; justify-content: flex-end; }
+  .app[data-theater="1"] .looper-grid { grid-template-columns: minmax(0, 1fr); }
+  .app[data-theater="1"] .looper-grid .marker.a,
+  .app[data-theater="1"] .looper-grid .marker.b,
+  .app[data-theater="1"] .looper-grid .transport { grid-column: 1; grid-row: auto; }
+  .app[data-theater="1"] .looper-grid .transport { padding: 4px 0 0; }
+  .app[data-theater="1"] .foot-cap { width: 44px; height: 44px; }
+  .app[data-theater="1"] .foot.big .foot-cap { width: 60px; height: 60px; }
+}

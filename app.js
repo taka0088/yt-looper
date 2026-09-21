@@ -466,8 +466,10 @@ for (const s of [el.track, el.loupeTrack, el.shield, el.knob]) s.addEventListene
 // デスクトップでは SCREEN の残り高さに 16:9 で収める（iPhone は幅いっぱい）
 const desktopMQ = window.matchMedia("(min-width: 900px)");
 function isTheater() { return el.app.dataset.theater === "1"; }
+const phoneMQ = window.matchMedia("(max-width: 520px)"); // スマホ縦持ち（CSS のブロックと同じ幅）
 function fitVideo() {
-  if (!desktopMQ.matches && !isTheater()) {
+  // スマホ縦持ちはシアターモードでも幅いっぱい固定（CSS 任せ）
+  if ((!desktopMQ.matches && !isTheater()) || phoneMQ.matches) {
     el.video.style.width = "";
     el.video.style.height = "";
     return;
@@ -481,6 +483,7 @@ function fitVideo() {
 }
 new ResizeObserver(() => fitVideo()).observe(el.screenBody);
 desktopMQ.addEventListener("change", fitVideo);
+phoneMQ.addEventListener("change", fitVideo);
 
 const ZOOM_MIN = 1, ZOOM_MAX = 4, ZOOM_STEP = 0.25;
 
