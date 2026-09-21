@@ -185,10 +185,36 @@ button:disabled { opacity: .45; cursor: default; }
 .foot:active .foot-cap, .foot[aria-pressed="true"] .foot-cap { transform: translateY(3px); }
 .foot.big .foot-cap { width: 80px; height: 80px; }
 .foot.small .foot-cap { width: 44px; height: 44px; }
-/* フットスイッチのキャップは黒アルマイトのサテン仕上げ（深い黒に、上の映り込みと 4 方向の柔らかい回転の光）。
-   外周に細い銀縁を残し、外側の暗い輪と影は元のクロームのものと同じ。ユーザー選定（2026-09-21、SET は案 E、
-   TO A/PLAY/LOOP は案 3＝大きい PLAY だけ銀縁を太く） */
+
+/* ---- フットスイッチの仕上げ（index.html の <html data-cap="..."> で切り替え） ----
+   chrome：クローム（標準。ユーザー確定）
+   black ：黒アルマイトのサテン仕上げ＋細い銀縁（2026-09-21 に試作してユーザー選定した案 E。PLAY だけ銀縁 3.5px）
+   切り替えは index.html の data-cap を書き換えるだけ。 */
 .foot-cap {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255,255,255,.7), rgba(255,255,255,0) 42%),
+    radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 0 58%, rgba(0,0,0,.28) 60%, rgba(0,0,0,0) 63%, rgba(255,255,255,.18) 66%, rgba(0,0,0,0) 69%),
+    conic-gradient(from 20deg, #e2e6ea, #8d939a 18%, #d5d9dd 33%, #7f858c 52%, #dbdfe3 68%, #878d94 84%, #e2e6ea);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.7),
+    inset 0 -2px 3px rgba(0,0,0,.35),
+    0 4px 0 #1f2226,
+    0 6px 10px rgba(0,0,0,.7),
+    0 0 0 4px #15171a,
+    0 0 0 6px #3f434a,
+    0 0 0 7px rgba(255,255,255,.06);
+}
+.foot:active .foot-cap, .foot[aria-pressed="true"] .foot-cap {
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.5),
+    inset 0 -2px 3px rgba(0,0,0,.35),
+    0 1px 0 #1f2226,
+    0 3px 6px rgba(0,0,0,.7),
+    0 0 0 4px #15171a,
+    0 0 0 6px #3f434a,
+    0 0 0 7px rgba(255,255,255,.06);
+}
+html[data-cap="black"] .foot-cap {
   background:
     radial-gradient(ellipse 50% 26% at 50% 20%, rgba(255,255,255,.58), rgba(255,255,255,.16) 60%, rgba(255,255,255,0) 100%),
     radial-gradient(ellipse 60% 22% at 50% 88%, rgba(255,255,255,.12), rgba(255,255,255,0) 100%),
@@ -199,20 +225,19 @@ button:disabled { opacity: .45; cursor: default; }
     inset 0 2px 2px rgba(255,255,255,.10), inset 0 -2px 3px rgba(0,0,0,.6),
     0 4px 0 #1f2226, 0 6px 10px rgba(0,0,0,.7), 0 0 0 4px #15171a, 0 0 0 6px #3f434a, 0 0 0 7px rgba(255,255,255,.06);
 }
-.foot:active .foot-cap, .foot[aria-pressed="true"] .foot-cap {
+html[data-cap="black"] .foot:active .foot-cap, html[data-cap="black"] .foot[aria-pressed="true"] .foot-cap {
   box-shadow:
     inset 0 0 0 2.5px #d5d9dd, inset 0 0 0 3.5px #767c83,
     inset 0 2px 2px rgba(255,255,255,.08), inset 0 -2px 3px rgba(0,0,0,.6),
     0 1px 0 #1f2226, 0 3px 6px rgba(0,0,0,.7), 0 0 0 4px #15171a, 0 0 0 6px #3f434a, 0 0 0 7px rgba(255,255,255,.06);
 }
-/* 大きい PLAY は大きさに合わせて銀縁を 3.5px に */
-.foot.big .foot-cap {
+html[data-cap="black"] .foot.big .foot-cap {
   box-shadow:
     inset 0 0 0 3.5px #d5d9dd, inset 0 0 0 4.5px #767c83,
     inset 0 2px 2px rgba(255,255,255,.10), inset 0 -2px 3px rgba(0,0,0,.6),
     0 4px 0 #1f2226, 0 6px 10px rgba(0,0,0,.7), 0 0 0 4px #15171a, 0 0 0 6px #3f434a, 0 0 0 7px rgba(255,255,255,.06);
 }
-.foot.big:active .foot-cap, .foot.big[aria-pressed="true"] .foot-cap {
+html[data-cap="black"] .foot.big:active .foot-cap, html[data-cap="black"] .foot.big[aria-pressed="true"] .foot-cap {
   box-shadow:
     inset 0 0 0 3.5px #d5d9dd, inset 0 0 0 4.5px #767c83,
     inset 0 2px 2px rgba(255,255,255,.08), inset 0 -2px 3px rgba(0,0,0,.6),
