@@ -20,8 +20,6 @@ const state = {
   loupe: { start: 0, end: 4, frozen: false }, // ルーペ帯の表示範囲（秒）
   pendingId: null,     // API 準備前に読み込み要求された ID
   playing: false,      // 直前の状態が再生中か（BUFFERING では更新しない）
-  zoom: 1,             // 動画の拡大率
-  panX: 0, panY: 0,    // 拡大時の表示位置（px）
 };
 
 const el = {
@@ -52,8 +50,10 @@ const el = {
   loopToggle: $("#loopToggle"),
   rateLabel: $("#rateLabel"),
   rateLabel2: $("#rateLabel2"),
-  rateDown: $("#rateDown"),
-  rateUp: $("#rateUp"),
+  speedBtn: $("#speedBtn"),
+  speedPop: $("#speedPop"),
+  speedClose: $("#speedClose"),
+  speedPopBackdrop: $("#speedPopBackdrop"),
   theaterBtn: $("#theaterBtn"),
   fullBtn: $("#fullBtn"),
   corner: $("#corner"),
@@ -83,10 +83,6 @@ const el = {
   showCaptions: $("#showCaptions"),
   app: $(".app"),
   screenBody: $("#screenBody"),
-  zoomIn: $("#zoomIn"),
-  zoomOut: $("#zoomOut"),
-  zoomReset: $("#zoomReset"),
-  zoomLabel: $("#zoomLabel"),
 };
 
 // ---------- ユーティリティ ----------
@@ -239,8 +235,6 @@ function renderRates() {
   el.knob.setAttribute("aria-valuetext", state.rate + "×");
   el.rateLabel.textContent = state.rate.toFixed(2);
   el.rateLabel2.textContent = state.rate.toFixed(2);
-  el.rateDown.disabled = idx <= 0;
-  el.rateUp.disabled = idx >= state.rates.length - 1;
 }
 
 function renderSaved() {
@@ -482,19 +476,18 @@ function fitVideo() {
   const w = Math.floor(Math.min(cw, ch * 16 / 9));
   el.video.style.width = w + "px";
   el.video.style.height = Math.floor(w * 9 / 16) + "px";
-  renderZoom();
+  renderBars();
 }
 new ResizeObserver(() => fitVideo()).observe(el.screenBody);
 desktopMQ.addEventListener("change", fitVideo);
 phoneMQ.addEventListener("change", () => { setTheater(!!loadStore().settings?.theater); fitVideo(); });
 const portraitMQ = window.matchMedia("(orientation: portrait)");
 
-const ZOOM_MIN = 1, ZOOM_MAX = 4, ZOOM_STEP = 0.25;
 
 // 表示サイズは「操作部コンパクト」固定（拡大したいときはシアターモード・全画面）
 function setSize(size) {
   el.app.dataset.size = size;
-  requestAnimationFrame(() => { fitVideo(); renderMarkers(); renderZoom(); });
+  requestAnimationFrame(() => { fitVideo(); renderMarkers(); renderBars(); });
 }
 
 // シアターモード：動画を横幅いっぱいに、LOOPER だけ薄く残す
@@ -505,15 +498,7 @@ function setTheater(on) {
   const store = loadStore();
   store.settings = { ...(store.settings || {}), theater: on };
   saveStore(store);
-  requestAnimationFrame(() => { fitVideo(); renderMarkers(); renderZoom(); });
-}
-
-// 拡大した動画がコンテナの外へ出ないように位置を制限する
-function clampPan() {
-  const w = el.video.clientWidth, h = el.video.clientHeight;
-  const maxX = (state.zoom - 1) * w / 2, maxY = (state.zoom - 1) * h / 2;
-  state.panX = clamp(state.panX, -maxX, maxX);
-  state.panY = clamp(state.panY, -maxY, maxY);
+  requestAnimationFrame(() => { fitVideo(); renderMarkers(); renderBars(); });
 }
 
 // 上下の黒帯の高さ。YouTube の表示はプレーヤーの高さに応じて大きくなるので比率＋下限で決める
@@ -526,44 +511,6 @@ function renderBars() {
   el.video.style.setProperty("--bar", bar + "px");
   el.video.style.setProperty("--pad-x", Math.round((w - vw) / 2) + "px");
   el.video.style.setProperty("--pad-y", Math.round((h0 - h) / 2) + "px");
-}
-
-function renderZoom() {
-  renderBars();
-  clampPan();
-  el.video.style.setProperty("--zoom", state.zoom);
-  el.video.style.setProperty("--pan-x", state.panX + "px");
-  el.video.style.setProperty("--pan-y", state.panY + "px");
-  el.video.classList.toggle("zoomed", state.zoom > 1);
-  el.zoomLabel.textContent = state.zoom.toFixed(2);
-  el.zoomOut.disabled = state.zoom <= ZOOM_MIN;
-  el.zoomIn.disabled = state.zoom >= ZOOM_MAX;
-}
-
-function setZoom(z, save = true) {
-  z = clamp(Math.round(z / ZOOM_STEP) * ZOOM_STEP, ZOOM_MIN, ZOOM_MAX);
-  const first = state.zoom === 1 && z > 1;
-  state.zoom = z;
-  if (z === 1) { state.panX = 0; state.panY = 0; }
-  renderZoom();
-  if (first) toast("ドラッグで見たい位置に動かせます");
-  else if (isTheater()) toast(el.zoomLabel.textContent + "×");
-  if (save) saveView();
-}
-
-// 動画ごとに拡大率と位置を覚える
-function saveView() {
-  if (!state.videoId) return;
-  const store = loadStore();
-  videoEntry(store, state.videoId).view = { zoom: state.zoom, panX: state.panX, panY: state.panY };
-  saveStore(store);
-}
-function restoreView(id) {
-  const v = loadStore().videos[id]?.view;
-  state.zoom = v?.zoom || 1;
-  state.panX = v?.panX || 0;
-  state.panY = v?.panY || 0;
-  renderZoom();
 }
 
 // ---------- プレーヤー制御 ----------
@@ -611,7 +558,6 @@ function loadVideo(id, start = 0) {
   state.a = 0; state.b = 0;
   state.loupe.frozen = false; loupeTickKey = "";
   el.video.classList.add("has-video");
-  restoreView(id);
   renderShield(YT.PlayerState.CUED);
   history.replaceState(null, "", `?v=${id}`);
   if (!state.player) createPlayer(id, start);
@@ -919,77 +865,18 @@ document.querySelectorAll(".nudge").forEach((wrap) => {
 
 // 動画上のタップは再生/停止。拡大中はドラッグで位置を動かす。2本指のピンチで拡大縮小
 {
-  let pan = null;
-  let tap = null;            // { t, x, y, ok } 1 本指の短いタップなら再生/停止
-  const touches = new Map(); // pointerId → {x, y}
-  let pinch = null;          // { dist, zoom }
-  const dist = () => { const [a, b] = [...touches.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
-
+  let tap = null; // { t, x, y } 1 本指の短いタップなら再生/停止
   el.shield.addEventListener("pointerdown", (e) => {
     e.preventDefault();
-    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    try { el.shield.setPointerCapture(e.pointerId); } catch {}
-    if (touches.size === 1) tap = { t: performance.now(), x: e.clientX, y: e.clientY, ok: true };
-    if (touches.size === 2) {
-      pan = null;
-      pinch = { dist: dist(), zoom: state.zoom };
-      if (tap) tap.ok = false;
-      return;
-    }
-    if (state.zoom <= 1) return;
-    pan = { x: e.clientX, y: e.clientY, px: state.panX, py: state.panY, moved: false };
+    tap = e.isPrimary ? { t: performance.now(), x: e.clientX, y: e.clientY } : null;
   });
-  el.shield.addEventListener("pointermove", (e) => {
-    if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pinch && touches.size === 2) {
-      state.zoom = clamp(pinch.zoom * dist() / pinch.dist, ZOOM_MIN, ZOOM_MAX);
-      if (state.zoom === 1) { state.panX = 0; state.panY = 0; }
-      renderZoom();
-      return;
-    }
-    if (!pan) return;
-    let dx = e.clientX - pan.x, dy = e.clientY - pan.y;
-    if (isPseudoFs() && portraitMQ.matches) [dx, dy] = [dy, -dx]; // 90° 回転中
-    if (Math.hypot(dx, dy) > 4) { pan.moved = true; el.shield.classList.add("panning"); }
-    if (pan.moved) {
-      state.panX = pan.px + dx;
-      state.panY = pan.py + dy;
-      renderZoom();
-    }
+  el.shield.addEventListener("pointerup", (e) => {
+    if (!tap || !e.isPrimary) return;
+    const short = performance.now() - tap.t < 600 && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 12;
+    tap = null;
+    if (short) togglePlay();
   });
-  const endPan = (e) => {
-    touches.delete(e.pointerId);
-    if (pinch) {
-      if (touches.size < 2) {
-        pinch = null;
-        state.zoom = Math.round(state.zoom * 20) / 20; // 0.05 刻みに丸める
-        renderZoom();
-        saveView();
-        toast(el.zoomLabel.textContent + "×");
-      }
-      if (touches.size === 0) tap = null;
-      return;
-    }
-    if (pan) {
-      el.shield.classList.remove("panning");
-      if (pan.moved) { saveView(); if (tap) tap.ok = false; } // ドラッグは再生切り替えにしない
-      pan = null;
-    }
-    // 1 本指で、動かさず、短く離したら再生/停止
-    if (e.type === "pointerup" && tap && tap.ok && touches.size === 0 &&
-        performance.now() - tap.t < 600 && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 12) {
-      togglePlay();
-    }
-    if (touches.size === 0) tap = null;
-  };
-  el.shield.addEventListener("pointerup", endPan);
-  el.shield.addEventListener("pointercancel", endPan);
-  // Mac：トラックパッドのピンチ / Ctrl+ホイールで拡大
-  el.shield.addEventListener("wheel", (e) => {
-    if (!e.ctrlKey) return;
-    e.preventDefault();
-    setZoom(state.zoom + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP));
-  }, { passive: false });
+  el.shield.addEventListener("pointercancel", () => { tap = null; });
 }
 el.theaterBtn.addEventListener("click", () => setTheater(!isTheater()));
 
@@ -1002,7 +889,7 @@ function usePseudoFs() { return phoneMQ.matches || !fullscreenOK; }
 function setPseudoFs(on) {
   el.app.dataset.fs = on ? "1" : "";
   el.fullBtn.setAttribute("aria-pressed", String(on));
-  requestAnimationFrame(() => { fitVideo(); renderZoom(); });
+  requestAnimationFrame(() => { fitVideo(); renderBars(); });
 }
 function isFullscreen() { return isPseudoFs() || !!(document.fullscreenElement || document.webkitFullscreenElement); }
 function toggleFullscreen() {
@@ -1038,12 +925,19 @@ for (const ev of ["fullscreenchange", "webkitfullscreenchange"]) {
     el.video.classList.remove("show-ui");
   });
 }
-el.rateDown.addEventListener("click", () => stepRate(-1));
-el.rateUp.addEventListener("click", () => stepRate(1));
-el.zoomIn.addEventListener("click", () => setZoom(state.zoom + ZOOM_STEP));
-el.zoomOut.addEventListener("click", () => setZoom(state.zoom - ZOOM_STEP));
-el.zoomReset.addEventListener("click", () => setZoom(1));
-window.addEventListener("resize", renderZoom);
+window.addEventListener("resize", renderBars);
+
+// SPEED パネル：LOOPER の SPEED ボタンで開閉。外側タップ・×・Esc で閉じる
+function isSpeedOpen() { return !el.speedPop.hidden; }
+function setSpeedOpen(on) {
+  el.speedPop.hidden = !on;
+  el.speedBtn.setAttribute("aria-expanded", String(on));
+  if (on) el.knob.focus({ preventScroll: true });
+  else el.speedBtn.focus({ preventScroll: true });
+}
+el.speedBtn.addEventListener("click", () => setSpeedOpen(!isSpeedOpen()));
+el.speedClose.addEventListener("click", () => setSpeedOpen(false));
+el.speedPopBackdrop.addEventListener("click", () => setSpeedOpen(false));
 el.hidePaused.addEventListener("change", () => {
   const store = loadStore();
   store.settings = { ...(store.settings || {}), hidePaused: el.hidePaused.checked };
@@ -1216,9 +1110,8 @@ document.addEventListener("keydown", (e) => {
     case "]": stepRate(1); break;
     case "t": case "T": setTheater(!isTheater()); break;
     case "f": case "F": toggleFullscreen(); break;
-    case "+": case "=": case ";": setZoom(state.zoom + ZOOM_STEP); toast(el.zoomLabel.textContent + "×"); break;
-    case "-": case "_": setZoom(state.zoom - ZOOM_STEP); toast(el.zoomLabel.textContent + "×"); break;
-    case "Escape": if (isPseudoFs()) setPseudoFs(false); else if (isTheater()) setTheater(false); break;
+    case "s": case "S": setSpeedOpen(!isSpeedOpen()); break;
+    case "Escape": if (isSpeedOpen()) setSpeedOpen(false); else if (isPseudoFs()) setPseudoFs(false); else if (isTheater()) setTheater(false); break;
   }
 });
 // ボタンにフォーカスが残っていても Space は常に再生/停止だけにする
@@ -1361,7 +1254,7 @@ el.countIn.checked = loadStore().settings?.countIn ?? false;
 el.apiKeyInput.value = el.apiKeyInput2.value = getApiKey();
 setSize("large");
 setTheater(!!loadStore().settings?.theater);
-renderZoom();
+renderBars();
 
 // ?v=ID や ?url=... で開かれた場合はすぐ読み込む
 {

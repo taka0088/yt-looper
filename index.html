@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&display=swap" rel="stylesheet">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="https://cdn.jsdelivr.net/npm/dseg@0.46.0/fonts/DSEG7-Classic/DSEG7Classic-Bold.woff2">
-  <link rel="stylesheet" href="style.css?v=20260921-1428">
+  <link rel="stylesheet" href="style.css?v=20260921-1445">
 </head>
 <body>
   <main class="app" data-size="large">
@@ -100,7 +100,7 @@
           <input id="apiKeyInput2" type="text" autocomplete="off" spellcheck="false" placeholder="未設定">
         </label>
         <button type="button" id="apiKeyClear" class="text-btn">キーを削除</button>
-        <p class="build">build 20260921-1428</p>
+        <p class="build">build 20260921-1445</p>
       </details>
 
       <details class="keys">
@@ -115,7 +115,7 @@
           <div><dt>[ / ]</dt><dd>速度を下げる / 上げる</dd></div>
           <div><dt>T</dt><dd>シアターモード（Esc で戻る）</dd></div>
           <div><dt>F</dt><dd>全画面</dd></div>
-          <div><dt>+ / −</dt><dd>動画を拡大 / 縮小（iPhone はピンチ）</dd></div>
+          <div><dt>S</dt><dd>SPEED パネルを開く / 閉じる</dd></div>
         </dl>
       </details>
     </aside>
@@ -153,19 +153,10 @@
           <h2>Looper</h2>
           <div class="looper-head-right">
             <button type="button" class="clear-btn" id="clearAB" title="A–B を解除して動画全体に戻す（C）">Clear A–B</button>
-            <div class="btn-group zoom" role="group" aria-label="拡大">
-              <span class="led-label">Zoom</span>
-              <button type="button" id="zoomOut" aria-label="縮小">−</button>
-              <span class="lcd small" id="zoomLabel">1.0×</span>
-              <button type="button" id="zoomIn" aria-label="拡大">＋</button>
-              <button type="button" id="zoomReset">Reset</button>
-            </div>
-            <div class="mini-speed" role="group" aria-label="再生速度">
-              <span class="led-label">Speed</span>
-              <button type="button" id="rateDown" aria-label="速度を下げる">−</button>
-              <span class="lcd small" id="rateLabel2">1×</span>
-              <button type="button" id="rateUp" aria-label="速度を上げる">＋</button>
-            </div>
+            <button type="button" class="speed-btn" id="speedBtn" aria-haspopup="dialog" aria-expanded="false" title="再生速度を変える">
+              <span class="speed-btn-label">Speed</span>
+              <span class="lcd small" id="rateLabel2">1.00</span>
+            </button>
           </div>
         </header>
 
@@ -236,11 +227,17 @@
 
     </section>
 
-    <section class="rack side">
+  </main>
+
+  <!-- SPEED：LOOPER の SPEED ボタンで、ラックから引き出したように出てくる -->
+  <div class="speed-pop" id="speedPop" hidden>
+    <div class="speed-pop-backdrop" id="speedPopBackdrop"></div>
+    <section class="rack pulled" role="dialog" aria-modal="true" aria-label="再生速度">
       <article class="module speed">
         <header class="module-head">
           <h2>Speed</h2>
           <span class="lcd small" id="rateLabel">1×</span>
+          <button type="button" class="speed-close" id="speedClose" aria-label="閉じる">×</button>
         </header>
         <div class="knob-wrap">
           <div class="knob" id="speedKnob" role="slider" tabindex="0" aria-label="再生速度" aria-valuemin="0.25" aria-valuemax="2" aria-valuenow="1">
@@ -258,11 +255,11 @@
         </div>
       </article>
     </section>
-  </main>
+  </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="https://www.youtube.com/iframe_api"></script>
-  <script src="app.js?v=20260921-1428"></script>
+  <script src="app.js?v=20260921-1445"></script>
 </body>
 </html>

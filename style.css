@@ -59,7 +59,7 @@ button, .tl-track, .loupe-track, .loupe-handle, .knob, .rates, .shield, .foot, .
 /* ================= 共通パーツ ================= */
 
 /* 小ボタン：ガラス玉風（案4 / E）。上端に境目のある映り込み帯＋下端からの強い照り返し */
-.metal-btn, .btn-group button, .nudge button, .panel-foot button, .loader button, .seek-group button, .mini-speed button, .clear-btn {
+.metal-btn, .btn-group button, .nudge button, .panel-foot button, .loader button, .seek-group button, .clear-btn, .speed-btn {
   background:
     linear-gradient(180deg, rgba(255,255,255,.46) 0%, rgba(255,255,255,.20) 27%, rgba(255,255,255,.04) 31%, rgba(255,255,255,0) 40%),
     radial-gradient(90% 55% at 50% 118%, rgba(255,255,255,.48), rgba(255,255,255,.10) 45%, rgba(255,255,255,0) 70%),
@@ -79,7 +79,7 @@ button, .tl-track, .loupe-track, .loupe-handle, .knob, .rates, .shield, .foot, .
   transition: transform .05s, box-shadow .05s, background .05s;
 }
 /* 押した状態：反射が弱まり、少し沈む（黒くしすぎない） */
-.btn-group button:active, .nudge button:active, .panel-foot button:active, .loader button:active, .seek-group button:active, .mini-speed button:active, .clear-btn:active {
+.btn-group button:active, .nudge button:active, .panel-foot button:active, .loader button:active, .seek-group button:active, .clear-btn:active, .speed-btn:active {
   background:
     linear-gradient(180deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.08) 30%, rgba(255,255,255,0) 60%),
     radial-gradient(95% 55% at 50% 122%, rgba(255,255,255,.30), rgba(255,255,255,.06) 45%, rgba(255,255,255,0) 72%),
@@ -117,7 +117,7 @@ button:disabled { opacity: .45; cursor: default; }
 .lcd.small { font-size: 13px; padding: 4px 8px; text-align: center; }
 .lcd.time { font-size: 16px; padding: 5px 10px; text-align: center; }
 /* 倍率の × は 7セグに無いので普通の書体で添える */
-#rateLabel::after, #rateLabel2::after, #zoomLabel::after {
+#rateLabel::after, #rateLabel2::after {
   content: "×";
   font-family: var(--font);
   font-size: .8em;
@@ -497,13 +497,9 @@ button:disabled { opacity: .45; cursor: default; }
   left: var(--pad-x, 0px); right: var(--pad-x, 0px);
   top: calc(var(--pad-y, 0px) - var(--bar, 0px));
   bottom: calc(var(--pad-y, 0px) - var(--bar, 0px));
-  transform-origin: center;
-  transform: translate(var(--pan-x, 0px), var(--pan-y, 0px)) scale(var(--zoom, 1));
 }
 .video-frame iframe, #player { position: absolute; inset: 0; width: 100%; height: 100%; }
 .shield { touch-action: pan-y; }              /* 縦スクロールは通し、ピンチは自前で処理 */
-.video.zoomed .shield { cursor: grab; touch-action: none; } /* 拡大中はドラッグで位置移動 */
-.video.zoomed .shield.panning { cursor: grabbing; }
 .shield {
   position: absolute; inset: 0;
   cursor: pointer;
@@ -584,14 +580,17 @@ button:disabled { opacity: .45; cursor: default; }
   letter-spacing: .1em;
   text-transform: uppercase;
 }
-.looper-head-right .btn-group.zoom { gap: 6px; }
-.looper-head-right .btn-group.zoom .led-label { margin-right: 2px; }
-.mini-speed { display: none; align-items: center; gap: 6px; }
-.mini-speed button {
-  width: 30px; height: 28px;
-  font-size: 15px;
-  line-height: 1;
+/* SPEED ボタン：黒ボタンの中に今の速度の小さな LCD 窓。押すと SPEED モジュールが引き出される */
+.speed-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 28px; padding: 0 5px 0 10px;
+  font-family: var(--font-cond);
+  font-size: 12px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
 }
+.speed-btn .lcd.small { font-size: 12px; padding: 2px 6px; }
+.speed-btn[aria-expanded="true"] .speed-btn-label { color: var(--amber); }
 
 .video-empty {
   position: absolute; inset: 0;
@@ -942,11 +941,10 @@ button:disabled { opacity: .45; cursor: default; }
   .app {
     height: 100dvh;
     grid-template-columns: 300px minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
       "rail rack"
-      "presets rack"
-      "side rack";
+      "presets rack";
     column-gap: 14px;
     row-gap: 12px;
     padding: 12px 16px 14px;
@@ -954,7 +952,6 @@ button:disabled { opacity: .45; cursor: default; }
   .rail-top { grid-area: rail; grid-template-columns: 1fr; gap: 8px; padding: 10px 12px; }
   .logo-mark { font-size: 26px; }
   .presets { grid-area: presets; min-height: 0; overflow: auto; }
-  .rack.side { grid-area: side; }
 
   /* ラック：上に SCREEN（残りの高さを全部使う）、下に LOOPER */
   .rack {
@@ -965,7 +962,6 @@ button:disabled { opacity: .45; cursor: default; }
     gap: 8px 12px;
     padding: 8px 26px;
   }
-  .rack.side { grid-template-rows: auto; }
   .module.screen { grid-column: 1 / -1; display: flex; flex-direction: column; min-height: 0; }
   .module.screen .module-head { flex: none; }
   .module.screen .module-foot { flex: none; margin-top: 8px; }
@@ -1026,7 +1022,6 @@ button:disabled { opacity: .45; cursor: default; }
       "side rack";
   }
   .app[data-size="full"] .presets { display: none; }
-  .app[data-size="full"] .rack.side { align-self: start; }
 }
 
 /* iPhone：プリセットはラックの下。PLAY まで1画面に入るよう詰める */
@@ -1034,7 +1029,6 @@ button:disabled { opacity: .45; cursor: default; }
   .app { padding: 8px 10px 20px; gap: 10px; }
   .presets { order: 3; }
   .rack { order: 1; padding: 8px 24px; gap: 10px; }
-  .rack.side { order: 2; }
   .module { padding: 8px 12px 12px; }
   .module-head { margin-bottom: 8px; }
   .module h2 { font-size: 17px; }
@@ -1097,14 +1091,10 @@ button:disabled { opacity: .45; cursor: default; }
 
 /* ================= スマホ縦（iPhone） ================= */
 @media (max-width: 520px) {
-  /* LOOPER ヘッダー：Zoom 一式が右にはみ出さないよう詰める */
+  /* LOOPER ヘッダー */
   .module.looper .module-head { flex-wrap: wrap; row-gap: 6px; }
   .looper-head-right { gap: 8px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
   .clear-btn { flex: none; white-space: nowrap; padding: 0 8px; font-size: 11px; letter-spacing: .06em; }
-  .looper-head-right .btn-group.zoom { gap: 4px; }
-  .looper-head-right .btn-group.zoom .led-label { display: none; }
-  .looper-head-right .btn-group.zoom button { height: 26px; min-width: 26px; padding: 0 6px; font-size: 12px; }
-  .looper-head-right .lcd.small { font-size: 12px; padding: 3px 5px; }
   /* A/B カードは縦に積む（±0.1s の文字が潰れないように） */
   .looper-grid { grid-template-columns: minmax(0, 1fr); }
   .nudge button { font-size: 11px; letter-spacing: -0.02em; }
@@ -1132,7 +1122,6 @@ button:disabled { opacity: .45; cursor: default; }
 }
 .app[data-theater="1"] .rail-top,
 .app[data-theater="1"] .presets,
-.app[data-theater="1"] .rack.side,
 .app[data-theater="1"] .module.screen .module-head,
 .app[data-theater="1"] .module.screen .module-foot { display: none; }
 .app[data-theater="1"] .rack {
@@ -1147,7 +1136,6 @@ button:disabled { opacity: .45; cursor: default; }
 .app[data-theater="1"] .module.screen { display: flex; flex-direction: column; min-height: 0; padding: 8px; }
 .app[data-theater="1"] .screen-body { flex: 1; min-height: 0; }
 .app[data-theater="1"] .screen-body .video { width: auto; }
-.app[data-theater="1"] .mini-speed { display: flex; }
 .app[data-theater="1"] .module.screen { padding: 6px; }
 /* LOOPER を薄い1段に */
 .app[data-theater="1"] .module.looper { padding: 6px 14px 10px; grid-row: 2; }
@@ -1212,7 +1200,6 @@ button:disabled { opacity: .45; cursor: default; }
   .app[data-theater="1"] .foot.big .foot-cap { width: 36px; height: 36px; }
   .app[data-theater="1"] .foot.small .foot-cap { width: 24px; height: 24px; }
   .app[data-theater="1"] .foot-label { font-size: 9px; }
-  .app[data-theater="1"] .mini-speed button { width: 26px; height: 24px; }
   .app[data-theater="1"] .lcd.small { font-size: 12px; padding: 2px 6px; }
 }
 
@@ -1357,3 +1344,38 @@ html:has(.app[data-fs="1"]) { overflow: hidden; }
 .search-setup .paste-hint strong { color: var(--amber); }
 .key-howto summary { cursor: pointer; font-size: 13px; color: #bfb9a8; padding: 4px 0; }
 .key-howto[open] summary { margin-bottom: 6px; }
+
+/* ================= SPEED の引き出しパネル ================= */
+.speed-pop {
+  position: fixed; inset: 0; z-index: 900;
+  display: grid; place-items: center;
+  padding: 16px;
+}
+.speed-pop[hidden] { display: none; }
+.speed-pop-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, .72); }
+/* ラックから引き出した 1 ユニット：レールとネジ穴ごと手前に浮く */
+.speed-pop .rack.pulled {
+  position: relative;
+  width: min(100%, 380px);
+  grid-template-rows: auto;
+  padding: 10px 26px;
+  box-shadow: 0 0 0 1px #000, 0 24px 60px rgba(0, 0, 0, .85), inset 0 0 0 1px rgba(255,255,255,.05);
+  animation: pull-out .16s ease-out;
+}
+@keyframes pull-out {
+  from { transform: translateY(-6px) scale(.97); opacity: 0; }
+}
+.speed-pop .module.speed .module-head { position: relative; padding-right: 34px; }
+.speed-pop .module.speed .knob-wrap { width: min(100%, 230px); }
+.speed-close {
+  position: absolute; right: -6px; top: 50%; transform: translateY(-50%);
+  width: 30px; height: 30px;
+  background: transparent; border: 0;
+  color: var(--speed-ink);
+  font-size: 22px; line-height: 1;
+  opacity: .7;
+}
+.speed-close:hover { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .speed-pop .rack.pulled { animation: none; }
+}
