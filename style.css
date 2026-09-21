@@ -1103,6 +1103,14 @@ button:disabled { opacity: .45; cursor: default; }
   .lcd.time { font-size: 13px; padding: 3px 7px; }
 }
 
+/* iPhone ホーム画面版：iOS 26 以降は時計の帯がガラスになり、ページをスクロールして帯の下に潜った
+   中身をぼかして映す（＝上部のにじみ）。ページ自体はスクロールさせず、body の中だけをスクロール
+   させて、帯の下に中身が入らないようにする。Safari のタブ表示には影響しない。 */
+@media (max-width: 520px) and (display-mode: standalone) {
+  html { height: 100%; overflow: hidden; }
+  body { height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: none; }
+}
+
 /* ================= スマホ縦（iPhone） ================= */
 @media (max-width: 520px) {
   /* iPhone：antialiased は文字を細く描くので、低解像度で描画されたときに潰れて見える。iPhone だけ外す */
@@ -1110,8 +1118,8 @@ button:disabled { opacity: .45; cursor: default; }
   /* 右下ボタンの背景ぼかし（backdrop-filter）は iOS で周りの文字まで低解像度にする報告があるので iPhone では外す */
   .corner-btn { backdrop-filter: none; }
   .build { word-break: break-all; }
-  /* LOOPER ヘッダー */
-  .module.looper .module-head { flex-wrap: wrap; row-gap: 6px; }
+  /* LOOPER ヘッダー（右端は角のネジに SPEED ボタンが被らないよう少し空ける） */
+  .module.looper .module-head { flex-wrap: wrap; row-gap: 6px; padding-right: 8px; }
   .looper-head-right { gap: 8px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
   .clear-btn { flex: none; white-space: nowrap; padding: 0 8px; font-size: 11px; letter-spacing: .06em; }
   /* A/B カードは縦に積む（±0.1s の文字が潰れないように） */

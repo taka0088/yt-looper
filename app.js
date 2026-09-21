@@ -1274,50 +1274,21 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
 }
 
-// iPhone のホーム画面から起動したとき（standalone）、WebKit が最初の描画を低い解像度のまま
-// 保持して文字がにじむことがある。再描画さえ走れば直るので、起動直後に何度か軽く促す。
-// transform は position: fixed の基準がずれて全画面やモーダルが一瞬動くので使わず、opacity だけ触る。
+// iPhone のホーム画面から起動したとき（standalone）だけ、設定欄の build 行に切り分け用の数字を出す。
+// iOS 26 以降は時計の帯がガラスになり、ページをスクロールして帯の下に入った中身をぼかして映すので、
+// ページ自体（window）がスクロールしていないこと（y 0）を確認できるようにしている。
 (() => {
   const standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
     || navigator.standalone === true;
-  if (!standalone) return; // Safari のタブでは起きないので何もしない
-
-  const repaint = () => {
-    document.body.style.opacity = "0.9999";
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      document.body.style.opacity = "";
-      // 同じ処理内で 1px 動かして戻すと描画が走らないので、1 フレーム置いてから戻す
-      if (window.scrollY === 0) {
-        window.scrollTo(0, 1);
-        requestAnimationFrame(() => { if (window.scrollY <= 1) window.scrollTo(0, 0); });
-      }
-    }));
-  };
-  const onVisible = () => { if (document.visibilityState === "visible") repaint(); };
-
-  // 重い初期化（プレーヤー生成など）の後にも効くように、時間をずらして 3 回
-  const timers = [100, 700, 1800].map((ms) => setTimeout(repaint, ms));
-  document.addEventListener("visibilitychange", onVisible);
-  window.addEventListener("pageshow", repaint);
-
-  // 設定欄の build 行に、にじみの切り分け用の数字を出す（standalone のときだけ）
+  if (!standalone) return;
   const diag = () => {
     const b = document.querySelector(".build");
     if (!b) return;
-    const vv = window.visualViewport;
-    const inset = getComputedStyle(document.body).paddingTop;
     b.textContent = b.textContent.replace(/ ·.*$/, "") +
-      ` · standalone · dpr ${window.devicePixelRatio} · scale ${vv ? vv.scale.toFixed(2) : "?"}` +
-      ` · win ${window.innerWidth}×${window.innerHeight} · doc ${document.documentElement.scrollWidth}×${document.documentElement.scrollHeight}` +
-      ` · top ${inset} · y ${Math.round(window.scrollY)}`;
+      ` · standalone · win ${window.innerWidth}×${window.innerHeight}` +
+      ` · top ${getComputedStyle(document.body).paddingTop} · y ${Math.round(window.scrollY)} · body ${Math.round(document.body.scrollTop)}`;
   };
-  timers.push(setTimeout(diag, 2000));
+  setTimeout(diag, 2000);
   window.addEventListener("scroll", diag, { passive: true });
-
-  window.addEventListener("pagehide", () => {
-    window.removeEventListener("scroll", diag);
-    timers.forEach(clearTimeout);
-    document.removeEventListener("visibilitychange", onVisible);
-    window.removeEventListener("pageshow", repaint);
-  }, { once: true });
+  document.body.addEventListener("scroll", diag, { passive: true });
 })();
