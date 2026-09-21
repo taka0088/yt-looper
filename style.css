@@ -494,9 +494,9 @@ button:disabled { opacity: .45; cursor: default; }
    YouTube が上端・下端に出す表示（タイトル・共有・その他の動画）は枠の外に追い出される */
 .video-frame {
   position: absolute;
-  left: 0; right: 0;
-  top: calc(-1 * var(--bar, 0px));
-  bottom: calc(-1 * var(--bar, 0px));
+  left: var(--pad-x, 0px); right: var(--pad-x, 0px);
+  top: calc(var(--pad-y, 0px) - var(--bar, 0px));
+  bottom: calc(var(--pad-y, 0px) - var(--bar, 0px));
   transform-origin: center;
   transform: translate(var(--pan-x, 0px), var(--pan-y, 0px)) scale(var(--zoom, 1));
 }
@@ -1101,6 +1101,13 @@ button:disabled { opacity: .45; cursor: default; }
   /* A/B カードは縦に積む（±0.1s の文字が潰れないように） */
   .looper-grid { grid-template-columns: minmax(0, 1fr); }
   .nudge button { font-size: 11px; letter-spacing: -0.02em; }
+  /* B カードも A と同じ向き（左：B と時刻、右：SET B） */
+  .marker.b { grid-template-columns: minmax(0, 1fr) auto; }
+  .marker.b .marker-top { flex-direction: row; }
+  .marker.b .marker-top, .marker.b .nudge { grid-column: 1; }
+  .marker.b .foot.small { grid-column: 2; }
+  /* スマホではシアターモードなし（全画面ボタンだけ） */
+  #theaterBtn { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1314,21 +1321,23 @@ button:disabled { opacity: .45; cursor: default; }
   .settings { display: block; }
 }
 
-/* シアターモードのスマホ縦持ち（シアター本体の定義より後に置いて上書きする） */
-@media (max-width: 520px) {
-  /* シアターモード（縦持ち）：動画は幅いっぱいのまま上に置き、
-     余った縦幅を灰色の余白にせず LOOPER に回す。A/B と PLAY は縦に積む */
-  .app[data-theater="1"] { height: auto; min-height: 100dvh; }
-  .app[data-theater="1"] .rack { grid-template-rows: auto minmax(0, 1fr); }
-  .app[data-theater="1"] .module.screen { flex: none; }
-  .app[data-theater="1"] .screen-body .video { width: 100%; height: auto; }
-  .app[data-theater="1"] .module.looper h2 { display: none; }
-  .app[data-theater="1"] .looper-head-right { width: 100%; justify-content: flex-end; }
-  .app[data-theater="1"] .looper-grid { grid-template-columns: minmax(0, 1fr); }
-  .app[data-theater="1"] .looper-grid .marker.a,
-  .app[data-theater="1"] .looper-grid .marker.b,
-  .app[data-theater="1"] .looper-grid .transport { grid-column: 1; grid-row: auto; }
-  .app[data-theater="1"] .looper-grid .transport { padding: 4px 0 0; }
-  .app[data-theater="1"] .foot-cap { width: 44px; height: 44px; }
-  .app[data-theater="1"] .foot.big .foot-cap { width: 60px; height: 60px; }
+/* ================= 疑似全画面（iPhone など全画面 API がない環境） =================
+   動画だけを画面いっぱいに固定する。縦持ちのときは 90° 回して横長いっぱいに */
+html:has(.app[data-fs="1"]) { overflow: hidden; }
+.app[data-fs="1"] .video {
+  position: fixed; left: 0; top: 0; z-index: 1000;
+  width: 100vw; height: 100dvh;
+  margin: 0; border: 0; border-radius: 0; box-shadow: none;
+  aspect-ratio: auto;
+  background: #000;
+}
+.app[data-fs="1"] #theaterBtn { display: none; }
+.app[data-fs="1"] .shield.cued { background-size: contain; } /* 枠が 16:9 でないのでサムネも収める */
+.app[data-fs="1"] .corner { right: max(10px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); }
+@media (orientation: portrait) {
+  .app[data-fs="1"] .video {
+    width: 100dvh; height: 100vw;
+    transform-origin: 0 0;
+    transform: rotate(90deg) translateY(-100%);
+  }
 }

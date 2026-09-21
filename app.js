@@ -377,8 +377,11 @@ function renderLoupe() {
 function renderLoupeTicks() {
   const { start, end } = state.loupe;
   const span = end - start;
-  const [major, minor] = span <= 4 ? [0.5, 0.1] : span <= 10 ? [1, 0.5] : span <= 30 ? [5, 1] : [10, 5];
-  const key = `${start.toFixed(2)}|${end.toFixed(2)}|${el.loupeTrack.clientWidth}`;
+  const width = el.loupeTrack.clientWidth || 320;
+  // ラベル（0:00.0 ≒ 36px）が重ならない最小の刻みを、表示幅から選ぶ
+  const steps = [[0.5, 0.1], [1, 0.5], [2, 0.5], [5, 1], [10, 5], [15, 5], [30, 10], [60, 10]];
+  const [major, minor] = steps.find(([m]) => m * width / span >= 56) || steps[steps.length - 1];
+  const key = `${start.toFixed(2)}|${end.toFixed(2)}|${width}`;
   if (key === loupeTickKey) return;
   loupeTickKey = key;
   el.loupeTicks.innerHTML = "";
@@ -469,7 +472,7 @@ function isTheater() { return el.app.dataset.theater === "1"; }
 const phoneMQ = window.matchMedia("(max-width: 520px)"); // スマホ縦持ち（CSS のブロックと同じ幅）
 function fitVideo() {
   // スマホ縦持ちはシアターモードでも幅いっぱい固定（CSS 任せ）
-  if ((!desktopMQ.matches && !isTheater()) || phoneMQ.matches) {
+  if ((!desktopMQ.matches && !isTheater()) || phoneMQ.matches || isPseudoFs()) {
     el.video.style.width = "";
     el.video.style.height = "";
     return;
@@ -483,7 +486,8 @@ function fitVideo() {
 }
 new ResizeObserver(() => fitVideo()).observe(el.screenBody);
 desktopMQ.addEventListener("change", fitVideo);
-phoneMQ.addEventListener("change", fitVideo);
+phoneMQ.addEventListener("change", () => { setTheater(!!loadStore().settings?.theater); fitVideo(); });
+const portraitMQ = window.matchMedia("(orientation: portrait)");
 
 const ZOOM_MIN = 1, ZOOM_MAX = 4, ZOOM_STEP = 0.25;
 
@@ -495,7 +499,8 @@ function setSize(size) {
 
 // シアターモード：動画を横幅いっぱいに、LOOPER だけ薄く残す
 function setTheater(on) {
-  el.app.dataset.theater = on ? "1" : "";
+  el.app.dataset.theater = on && !phoneMQ.matches ? "1" : ""; // スマホではシアターなし
+
   el.theaterBtn.setAttribute("aria-pressed", String(on));
   const store = loadStore();
   store.settings = { ...(store.settings || {}), theater: on };
@@ -513,9 +518,14 @@ function clampPan() {
 
 // 上下の黒帯の高さ。YouTube の表示はプレーヤーの高さに応じて大きくなるので比率＋下限で決める
 function renderBars() {
-  const h = el.video.clientHeight;
+  // 疑似全画面では枠が 16:9 でないので、動画の 16:9 領域を中央に置き、外側は黒にする
+  const w = el.video.clientWidth, h0 = el.video.clientHeight;
+  const vw = isPseudoFs() ? Math.min(w, h0 * 16 / 9) : w;
+  const h = isPseudoFs() ? vw * 9 / 16 : h0;
   const bar = Math.max(72, Math.round(h * 0.16));
   el.video.style.setProperty("--bar", bar + "px");
+  el.video.style.setProperty("--pad-x", Math.round((w - vw) / 2) + "px");
+  el.video.style.setProperty("--pad-y", Math.round((h0 - h) / 2) + "px");
 }
 
 function renderZoom() {
@@ -936,7 +946,8 @@ document.querySelectorAll(".nudge").forEach((wrap) => {
       return;
     }
     if (!pan) return;
-    const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+    let dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+    if (isPseudoFs() && portraitMQ.matches) [dx, dy] = [dy, -dx]; // 90° 回転中
     if (Math.hypot(dx, dy) > 4) { pan.moved = true; el.shield.classList.add("panning"); }
     if (pan.moved) {
       state.panX = pan.px + dx;
@@ -981,10 +992,18 @@ el.theaterBtn.addEventListener("click", () => setTheater(!isTheater()));
 
 // 全画面：ブラウザの全画面 + シアターモード。iPhone の Safari は非対応なのでボタンを隠す
 const fullscreenOK = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
-el.fullBtn.hidden = !fullscreenOK;
-function isFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+// iPhone の Safari には全画面 API がないので、動画だけを画面いっぱいに固定する「疑似全画面」を使う。
+// 縦持ちのときは動画を 90° 回して、iPhone を横に倒せば横長いっぱいに見える
+function isPseudoFs() { return el.app.dataset.fs === "1"; }
+function usePseudoFs() { return phoneMQ.matches || !fullscreenOK; }
+function setPseudoFs(on) {
+  el.app.dataset.fs = on ? "1" : "";
+  el.fullBtn.setAttribute("aria-pressed", String(on));
+  requestAnimationFrame(() => { fitVideo(); renderZoom(); });
+}
+function isFullscreen() { return isPseudoFs() || !!(document.fullscreenElement || document.webkitFullscreenElement); }
 function toggleFullscreen() {
-  if (!fullscreenOK) return;
+  if (usePseudoFs()) { setPseudoFs(!isPseudoFs()); return; }
   if (isFullscreen()) {
     (document.exitFullscreen || document.webkitExitFullscreen).call(document);
   } else {
@@ -1182,7 +1201,7 @@ document.addEventListener("keydown", (e) => {
     case "f": case "F": toggleFullscreen(); break;
     case "+": case "=": case ";": setZoom(state.zoom + ZOOM_STEP); toast(el.zoomLabel.textContent + "×"); break;
     case "-": case "_": setZoom(state.zoom - ZOOM_STEP); toast(el.zoomLabel.textContent + "×"); break;
-    case "Escape": if (isTheater()) setTheater(false); break;
+    case "Escape": if (isPseudoFs()) setPseudoFs(false); else if (isTheater()) setTheater(false); break;
   }
 });
 // ボタンにフォーカスが残っていても Space は常に再生/停止だけにする
