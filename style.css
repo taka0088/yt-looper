@@ -1111,13 +1111,14 @@ button:disabled { opacity: .45; cursor: default; }
    判定は CSS の display-mode と、JS が付ける html.standalone の両方（iOS の版による差に備える）。 */
 @media (max-width: 520px) and (display-mode: standalone) {
   html { height: 100%; overflow: hidden; }
-  body { height: 100%; overflow: hidden; padding-top: calc(env(safe-area-inset-top, 0px) + 12px); }
-  .app { height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: none; }
+  body { height: 100%; overflow: hidden; padding-top: calc(env(safe-area-inset-top, 0px) + 12px); padding-bottom: 0; }
+  /* 下はホームバーの下まで中身を流す（画面下に帯が居座らないように）。最後まで見えるよう内側で余白を足す */
+  .app { height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: none; padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
 }
 @media (max-width: 520px) {
   html.standalone { height: 100%; overflow: hidden; }
-  html.standalone body { height: 100%; overflow: hidden; padding-top: calc(env(safe-area-inset-top, 0px) + 12px); }
-  html.standalone .app { height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: none; }
+  html.standalone body { height: 100%; overflow: hidden; padding-top: calc(env(safe-area-inset-top, 0px) + 12px); padding-bottom: 0; }
+  html.standalone .app { height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: none; padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* ================= スマホ縦（iPhone） ================= */
