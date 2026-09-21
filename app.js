@@ -1286,7 +1286,11 @@ if ("serviceWorker" in navigator) {
     document.body.style.opacity = "0.9999";
     requestAnimationFrame(() => requestAnimationFrame(() => {
       document.body.style.opacity = "";
-      if (window.scrollY === 0) { window.scrollTo(0, 1); window.scrollTo(0, 0); }
+      // 同じ処理内で 1px 動かして戻すと描画が走らないので、1 フレーム置いてから戻す
+      if (window.scrollY === 0) {
+        window.scrollTo(0, 1);
+        requestAnimationFrame(() => { if (window.scrollY <= 1) window.scrollTo(0, 0); });
+      }
     }));
   };
   const onVisible = () => { if (document.visibilityState === "visible") repaint(); };
@@ -1296,7 +1300,22 @@ if ("serviceWorker" in navigator) {
   document.addEventListener("visibilitychange", onVisible);
   window.addEventListener("pageshow", repaint);
 
+  // 設定欄の build 行に、にじみの切り分け用の数字を出す（standalone のときだけ）
+  const diag = () => {
+    const b = document.querySelector(".build");
+    if (!b) return;
+    const vv = window.visualViewport;
+    const inset = getComputedStyle(document.body).paddingTop;
+    b.textContent = b.textContent.replace(/ ·.*$/, "") +
+      ` · standalone · dpr ${window.devicePixelRatio} · scale ${vv ? vv.scale.toFixed(2) : "?"}` +
+      ` · win ${window.innerWidth}×${window.innerHeight} · doc ${document.documentElement.scrollWidth}×${document.documentElement.scrollHeight}` +
+      ` · top ${inset} · y ${Math.round(window.scrollY)}`;
+  };
+  timers.push(setTimeout(diag, 2000));
+  window.addEventListener("scroll", diag, { passive: true });
+
   window.addEventListener("pagehide", () => {
+    window.removeEventListener("scroll", diag);
     timers.forEach(clearTimeout);
     document.removeEventListener("visibilitychange", onVisible);
     window.removeEventListener("pageshow", repaint);

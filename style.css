@@ -1107,6 +1107,9 @@ button:disabled { opacity: .45; cursor: default; }
 @media (max-width: 520px) {
   /* iPhone：antialiased は文字を細く描くので、低解像度で描画されたときに潰れて見える。iPhone だけ外す */
   body { -webkit-font-smoothing: auto; }
+  /* 右下ボタンの背景ぼかし（backdrop-filter）は iOS で周りの文字まで低解像度にする報告があるので iPhone では外す */
+  .corner-btn { backdrop-filter: none; }
+  .build { word-break: break-all; }
   /* LOOPER ヘッダー */
   .module.looper .module-head { flex-wrap: wrap; row-gap: 6px; }
   .looper-head-right { gap: 8px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
