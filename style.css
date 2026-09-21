@@ -1088,6 +1088,21 @@ button:disabled { opacity: .45; cursor: default; }
   .lcd.time { font-size: 13px; padding: 3px 7px; }
 }
 
+/* ================= スマホ縦（iPhone） ================= */
+@media (max-width: 520px) {
+  /* LOOPER ヘッダー：Zoom 一式が右にはみ出さないよう詰める */
+  .module.looper .module-head { flex-wrap: wrap; row-gap: 6px; }
+  .looper-head-right { gap: 8px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
+  .clear-btn { flex: none; white-space: nowrap; padding: 0 8px; font-size: 11px; letter-spacing: .06em; }
+  .looper-head-right .btn-group.zoom { gap: 4px; }
+  .looper-head-right .btn-group.zoom .led-label { display: none; }
+  .looper-head-right .btn-group.zoom button { height: 26px; min-width: 26px; padding: 0 6px; font-size: 12px; }
+  .looper-head-right .lcd.small { font-size: 12px; padding: 3px 5px; }
+  /* A/B カードは縦に積む（±0.1s の文字が潰れないように） */
+  .looper-grid { grid-template-columns: minmax(0, 1fr); }
+  .nudge button { font-size: 11px; letter-spacing: -0.02em; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
