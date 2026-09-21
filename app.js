@@ -1274,23 +1274,9 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
 }
 
-// iPhone のホーム画面から起動したとき（standalone）だけ、設定欄の build 行に切り分け用の数字を出す。
-// iOS 26 以降は時計の帯がガラスになり、ページをスクロールして帯の下に入った中身をぼかして映すので、
-// ページ自体（window）がスクロールしていないこと（y 0）を確認できるようにしている。
-(() => {
-  const standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
-    || navigator.standalone === true;
-  if (!standalone) return;
-  // CSS の display-mode 判定が効かない iOS の版に備えて、html にも印を付ける
+// iPhone のホーム画面から起動したとき（standalone）は html に印を付ける。
+// iOS 26 以降は時計の帯がガラスになり、帯の下に入った中身をぼかして映すので、CSS 側（html.standalone）で
+// ページをスクロールさせず、帯の下に無地の空きを置いて中身だけをスクロールさせている。
+if ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true) {
   document.documentElement.classList.add("standalone");
-  const diag = () => {
-    const b = document.querySelector(".build");
-    if (!b) return;
-    b.textContent = b.textContent.replace(/ ·.*$/, "") +
-      ` · standalone · win ${window.innerWidth}×${window.innerHeight}` +
-      ` · top ${getComputedStyle(document.body).paddingTop} · y ${Math.round(window.scrollY)} · app ${Math.round(document.querySelector(".app").scrollTop)}`;
-  };
-  setTimeout(diag, 2000);
-  window.addEventListener("scroll", diag, { passive: true });
-  document.querySelector(".app").addEventListener("scroll", diag, { passive: true });
-})();
+}

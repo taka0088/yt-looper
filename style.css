@@ -1127,7 +1127,6 @@ button:disabled { opacity: .45; cursor: default; }
   body { -webkit-font-smoothing: auto; }
   /* 右下ボタンの背景ぼかし（backdrop-filter）は iOS で周りの文字まで低解像度にする報告があるので iPhone では外す */
   .corner-btn { backdrop-filter: none; }
-  .build { word-break: break-all; }
   /* LOOPER ヘッダー（右端は角のネジに SPEED ボタンが被らないよう少し空ける） */
   .module.looper .module-head { flex-wrap: wrap; row-gap: 6px; padding-right: 8px; }
   .looper-head-right { gap: 8px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
