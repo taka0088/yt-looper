@@ -1,5 +1,15 @@
 # YT LOOPER
 
+## 公開版（GitHub Pages）
+
+https://taka0088.github.io/yt-looper/
+
+- リポジトリ: https://github.com/taka0088/yt-looper
+- `main` に push すると 1〜2 分で公開版が更新される
+- iPhone は Safari で開き、共有 →「ホーム画面に追加」でアプリのように使える
+- YouTube Data API キーは端末ごとの localStorage 保存なので、iPhone では設定欄に再入力する
+
+
 YouTube の動画の好きな区間（A点〜B点）を繰り返し再生し、速度を変えて練習するための Web アプリです。
 MacBook のブラウザと iPhone の Safari（ホーム画面に追加してアプリとして）で動きます。
 
