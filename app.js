@@ -920,6 +920,7 @@ document.querySelectorAll(".nudge").forEach((wrap) => {
 // 動画上のタップは再生/停止。拡大中はドラッグで位置を動かす。2本指のピンチで拡大縮小
 {
   let pan = null;
+  let tap = null;            // { t, x, y, ok } 1 本指の短いタップなら再生/停止
   const touches = new Map(); // pointerId → {x, y}
   let pinch = null;          // { dist, zoom }
   const dist = () => { const [a, b] = [...touches.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
@@ -928,10 +929,11 @@ document.querySelectorAll(".nudge").forEach((wrap) => {
     e.preventDefault();
     touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
     try { el.shield.setPointerCapture(e.pointerId); } catch {}
+    if (touches.size === 1) tap = { t: performance.now(), x: e.clientX, y: e.clientY, ok: true };
     if (touches.size === 2) {
       pan = null;
       pinch = { dist: dist(), zoom: state.zoom };
-      el.shield.dataset.skipClick = "1";
+      if (tap) tap.ok = false;
       return;
     }
     if (state.zoom <= 1) return;
@@ -965,22 +967,23 @@ document.querySelectorAll(".nudge").forEach((wrap) => {
         saveView();
         toast(el.zoomLabel.textContent + "×");
       }
+      if (touches.size === 0) tap = null;
       return;
     }
-    if (!pan) return;
-    el.shield.classList.remove("panning");
-    if (pan.moved) saveView();
-    const moved = pan.moved;
-    pan = null;
-    // ドラッグ直後の click は再生切り替えにしない
-    if (moved) el.shield.dataset.skipClick = "1";
+    if (pan) {
+      el.shield.classList.remove("panning");
+      if (pan.moved) { saveView(); if (tap) tap.ok = false; } // ドラッグは再生切り替えにしない
+      pan = null;
+    }
+    // 1 本指で、動かさず、短く離したら再生/停止
+    if (e.type === "pointerup" && tap && tap.ok && touches.size === 0 &&
+        performance.now() - tap.t < 600 && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 12) {
+      togglePlay();
+    }
+    if (touches.size === 0) tap = null;
   };
   el.shield.addEventListener("pointerup", endPan);
   el.shield.addEventListener("pointercancel", endPan);
-  el.shield.addEventListener("click", () => {
-    if (el.shield.dataset.skipClick) { delete el.shield.dataset.skipClick; return; }
-    togglePlay();
-  });
   // Mac：トラックパッドのピンチ / Ctrl+ホイールで拡大
   el.shield.addEventListener("wheel", (e) => {
     if (!e.ctrlKey) return;
@@ -1062,7 +1065,7 @@ el.showCaptions.addEventListener("change", () => {
 
 // 巻き戻し・早送りボタン：⏪ 30 … 1 ／ 1 … 30 ⏩
 {
-  const SEEK_STEPS = [30, 10, 5, 1];
+  const SEEK_STEPS = [30, 10, 1];
   const icon = (dir) => `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="currentColor">${
     dir < 0
       ? '<path d="M11 6v12L2 12zM22 6v12l-9-6z"/>'
@@ -1153,21 +1156,35 @@ for (const [input, which] of [[el.timeA, "a"], [el.timeB, "b"]]) {
   });
 }
 
-// スピードノブ：上下ドラッグ、ホイール、矢印キー
+// スピードノブ：本物のつまみのように中心のまわりを回す（ホイール、矢印キーも）
 {
-  let drag = null;
+  let drag = null; // { cx, cy, last, angle }
+  const pointerAngle = (e) => Math.atan2(e.clientY - drag.cy, e.clientX - drag.cx) * 180 / Math.PI + 90; // 0° = 上
   el.knob.addEventListener("pointerdown", (e) => {
-    drag = { y: e.clientY, idx: Math.max(0, state.rates.indexOf(state.rate)) };
+    const r = el.knob.getBoundingClientRect();
+    drag = { cx: r.left + r.width / 2, cy: r.top + r.height / 2, last: 0, angle: rateAngle(Math.max(0, state.rates.indexOf(state.rate))) };
+    drag.last = pointerAngle(e);
+    el.knob.classList.add("turning");
     try { el.knob.setPointerCapture(e.pointerId); } catch {}
     e.preventDefault();
   });
   el.knob.addEventListener("pointermove", (e) => {
     if (!drag) return;
-    const steps = Math.round((drag.y - e.clientY) / 28); // 28px で 1 段
-    const idx = clamp(drag.idx + steps, 0, state.rates.length - 1);
+    const a = pointerAngle(e);
+    let d = a - drag.last;                      // 前回からの回転量（-180〜180 に正規化）
+    d = ((d + 540) % 360) - 180;
+    drag.last = a;
+    drag.angle = clamp(drag.angle + d, -KNOB_SWEEP / 2, KNOB_SWEEP / 2);
+    const idx = Math.round((drag.angle + KNOB_SWEEP / 2) / (KNOB_SWEEP / (state.rates.length - 1)));
     if (state.rates[idx] !== state.rate) setRate(state.rates[idx]);
+    el.knobBody.style.setProperty("--angle", drag.angle + "deg"); // 指に追従して滑らかに回す
   });
-  const end = () => { drag = null; };
+  const end = () => {
+    if (!drag) return;
+    drag = null;
+    el.knob.classList.remove("turning");
+    renderRates(); // 最寄りの段にカチッと収める
+  };
   el.knob.addEventListener("pointerup", end);
   el.knob.addEventListener("pointercancel", end);
   el.knob.addEventListener("wheel", (e) => {
