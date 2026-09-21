@@ -56,6 +56,7 @@ body {
   font-family: var(--font);
   font-size: 15px;
   line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
@@ -1104,6 +1105,8 @@ button:disabled { opacity: .45; cursor: default; }
 
 /* ================= スマホ縦（iPhone） ================= */
 @media (max-width: 520px) {
+  /* iPhone：antialiased は文字を細く描くので、低解像度で描画されたときに潰れて見える。iPhone だけ外す */
+  body { -webkit-font-smoothing: auto; }
   /* LOOPER ヘッダー */
   .module.looper .module-head { flex-wrap: wrap; row-gap: 6px; }
   .looper-head-right { gap: 8px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
