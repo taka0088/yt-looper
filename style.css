@@ -950,6 +950,8 @@ button:disabled { opacity: .45; cursor: default; }
 
 /* ================= デスクトップ：1画面に収める ================= */
 @media (min-width: 900px) {
+  /* LOOPER ヘッダー：左右の角のネジ（中心 12px・半径 4.5px）に文字やボタンが被らないよう内側に寄せる */
+  .module.looper .module-head { padding: 0 6px; }
   /* ロゴと URL 欄は左列に収め、ラックは画面の上端から使う（動画を最大にするため） */
   .app {
     height: 100dvh;
