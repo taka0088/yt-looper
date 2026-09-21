@@ -1005,7 +1005,9 @@ button:disabled { opacity: .45; cursor: default; }
   .looper-grid .marker.b .foot.small { grid-column: 1; }
   .foot.big .foot-cap { width: 76px; height: 76px; }
   .looper-grid .marker.a { grid-column: 1; grid-row: 1; }
-  .looper-grid .transport { grid-column: 2; grid-row: 1; align-self: end; padding: 0 6px 6px; }
+  /* スイッチの銀の縁（影の 7px）とランプの縁（3px）は箱の外に描かれるので、SEEK 列との間とランプの下を空ける */
+  .looper-grid .transport { grid-column: 2; grid-row: 1; align-self: end; padding: 12px 6px 6px; }
+  .foot .led { margin-bottom: 8px; }
   .looper-grid .marker.b { grid-column: 3; grid-row: 1; }
   .module.speed .knob-wrap { width: min(100%, 210px); }
 
