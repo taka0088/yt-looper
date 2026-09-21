@@ -1281,14 +1281,16 @@ if ("serviceWorker" in navigator) {
   const standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
     || navigator.standalone === true;
   if (!standalone) return;
+  // CSS の display-mode 判定が効かない iOS の版に備えて、html にも印を付ける
+  document.documentElement.classList.add("standalone");
   const diag = () => {
     const b = document.querySelector(".build");
     if (!b) return;
     b.textContent = b.textContent.replace(/ ·.*$/, "") +
       ` · standalone · win ${window.innerWidth}×${window.innerHeight}` +
-      ` · top ${getComputedStyle(document.body).paddingTop} · y ${Math.round(window.scrollY)} · body ${Math.round(document.body.scrollTop)}`;
+      ` · top ${getComputedStyle(document.body).paddingTop} · y ${Math.round(window.scrollY)} · app ${Math.round(document.querySelector(".app").scrollTop)}`;
   };
   setTimeout(diag, 2000);
   window.addEventListener("scroll", diag, { passive: true });
-  document.body.addEventListener("scroll", diag, { passive: true });
+  document.querySelector(".app").addEventListener("scroll", diag, { passive: true });
 })();

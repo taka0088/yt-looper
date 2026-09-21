@@ -1106,9 +1106,18 @@ button:disabled { opacity: .45; cursor: default; }
 /* iPhone ホーム画面版：iOS 26 以降は時計の帯がガラスになり、ページをスクロールして帯の下に潜った
    中身をぼかして映す（＝上部のにじみ）。ページ自体はスクロールさせず、body の中だけをスクロール
    させて、帯の下に中身が入らないようにする。Safari のタブ表示には影響しない。 */
+/* ガラスのぼかしは帯の中だけでなく、帯の下 35〜40px にも薄く広がる（開発者の報告）。そこには
+   無地の帯（40px）を置き、中身はその下からスクロールさせる。無地の上ではぼかしても何も変わらない。
+   判定は CSS の display-mode と、JS が付ける html.standalone の両方（iOS の版による差に備える）。 */
 @media (max-width: 520px) and (display-mode: standalone) {
   html { height: 100%; overflow: hidden; }
-  body { height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: none; }
+  body { height: 100%; overflow: hidden; padding-top: calc(env(safe-area-inset-top, 0px) + 40px); }
+  .app { height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: none; }
+}
+@media (max-width: 520px) {
+  html.standalone { height: 100%; overflow: hidden; }
+  html.standalone body { height: 100%; overflow: hidden; padding-top: calc(env(safe-area-inset-top, 0px) + 40px); }
+  html.standalone .app { height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: none; }
 }
 
 /* ================= スマホ縦（iPhone） ================= */
