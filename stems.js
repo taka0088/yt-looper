@@ -1188,10 +1188,13 @@ window.Stems = (() => {
   async function hello() {
     S.server = false;
     if (!SERVER) return false;
+    S.macErr = "";
     try {
-      await api("/api/hello", { timeout: LOCAL_OK ? 4000 : 1500 });
+      await api("/api/hello", { timeout: LOCAL_OK ? 8000 : 1500 });
       S.server = true;
-    } catch { /* つながらない */ }
+    } catch (err) {
+      S.macErr = err?.name === "AbortError" ? "時間切れ" : String(err?.message || err); // 一時的：原因調べ
+    }
     if (LOCAL_OK) renderMac();
     return S.server;
   }
@@ -1201,7 +1204,7 @@ window.Stems = (() => {
     if (document.activeElement !== ui.macAddr) ui.macAddr.value = SERVER ? SERVER.replace(/^https:\/\//, "") : "";
     ui.macState.textContent = !SERVER ? "入れると、Mac で分けた曲をこのアプリから直接聴いたり保存したりできます。"
       : S.server ? "Mac につながっています。"
-      : "Mac につながりません。Mac の YT LOOPER と、この端末の Tailscale がオンか確かめてください（保存した曲はそのまま聴けます）。";
+      : `Mac につながりません。Mac の YT LOOPER と、この端末の Tailscale がオンか確かめてください（保存した曲はそのまま聴けます）。${S.macErr ? `［${S.macErr}］` : ""}`;
     ui.macState.dataset.ok = S.server ? "1" : "";
   }
   ui.macAddr?.addEventListener("change", async () => {
