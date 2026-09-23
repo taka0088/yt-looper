@@ -58,7 +58,8 @@ window.Stems = (() => {
     owning: false,     // いま分けた音で鳴らしているか（YouTube 側は無音）
     ctx: null,
     ch: PARTS.map((p) => ({ ...p, pos: UNITY, mute: false, solo: false, level: 0 })),
-    mix: null,         // { id, url, sr, frames, dur, channels, index[], rate } いま鳴らす曲のまとめた音
+    mix: null,         // { id, url, sr, frames, dur, channels, index[], rate, live, ready } いま鳴らす曲のまとめた音。
+                       // live＝まだ分けている途中（ready 秒まで聴ける）
     chunks: new Map(), // かたまりの番号 → { bufs: AudioBuffer[6] | null, used }
     queue: [],         // 取りに行く順番
     loading: 0,
@@ -273,20 +274,25 @@ window.Stems = (() => {
     document.addEventListener(type, unlock, true);
   }
 
-  async function loadAudio(id) {
+  // live：分けている途中の曲（分離サーバーの status の live）。分け終わった所まで先に聴く
+  async function loadAudio(id, live = null) {
     ensureGraph();
     unloadAudio();
     S.loadedId = id;
     renderStatus();
     try {
-      const r = await fetch(`/stems/${id}/mix.json`, { cache: "no-store" });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      const m = await r.json();
+      let m = live;
+      if (!m) {
+        const r = await fetch(`/stems/${id}/mix.json`, { cache: "no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        m = await r.json();
+      }
       if (S.loadedId !== id) return;
       S.mix = {
         id, url: `/stems/${id}/mix.pcm`, sr: m.sr, frames: m.frames, dur: m.frames / m.sr, channels: m.channels,
         index: S.ch.map((c) => m.parts.indexOf(c.id)),
         rate: 1,
+        live: !!live, ready: (live ? live.ready : m.frames) / m.sr,
       };
       S.loaded = true;
       diag("loaded", { id, dur: +S.mix.dur.toFixed(1) });
@@ -316,9 +322,16 @@ window.Stems = (() => {
   // かたまり i が始まる曲の位置（速度を変えた音は前のかたまりと XFADE だけ重なる）
   const chunkStart = (i, rate) => (rate === 1 ? i * CHUNK : Math.max(0, i * CHUNK - XFADE));
 
+  // かたまり i がもう分け終わっているか（速度を変えた音は、前後の余白 0.3 秒まで要る）
+  function fetchable(i) {
+    const m = S.mix;
+    if (!m || i < 0 || i * CHUNK >= m.dur) return false;
+    return !m.live || Math.min((i + 1) * CHUNK, m.dur) + (m.rate === 1 ? 0 : 0.4) <= m.ready;
+  }
+
   function need(i, urgent = false) {
     const m = S.mix;
-    if (!m || i < 0 || i * CHUNK >= m.dur) return;
+    if (!fetchable(i)) return;
     const k = S.chunks.get(i);
     if (k) { k.used = performance.now(); return; }
     S.chunks.set(i, { bufs: null, used: performance.now() });
@@ -500,10 +513,19 @@ window.Stems = (() => {
 
   function owns() { return S.owning; }
 
+  // いまの再生位置が分け終わった所の中か。出入りを繰り返さないよう、入るときは 3 秒の余裕を見る
+  function covered() {
+    const m = S.mix;
+    if (!m?.live) return true;
+    const t = state.player?.getCurrentTime?.() || 0;
+    return t < m.ready - (S.owning ? 0.5 : 3);
+  }
+
   function updateOwnership() {
-    // 処理系が動き出す（最初に画面に触れる）までは YouTube の音のまま鳴らす
+    // 処理系が動き出す（最初に画面に触れる）までは YouTube の音のまま鳴らす。
+    // 分けている途中は、分け終わった所の中だけ分けた音で鳴らす（先へ飛んだら、追いつくまで元の音）
     const want = S.available && S.on && S.loaded && S.ctx?.state === "running"
-      && S.loadedId === state.videoId && !!state.player?.mute;
+      && S.loadedId === state.videoId && !!state.player?.mute && covered();
     if (want === S.owning) return;
     S.owning = want;
     if (want) {
@@ -673,15 +695,35 @@ window.Stems = (() => {
       stopPolling();
       setPhase("ready");
       if (S.loadedId !== id) loadAudio(id);
+      else if (S.mix?.live) finishLive(id);
     } else if (st.state === "working") {
       setPhase("working", st);
       startPolling(id);
+      if (st.live) {
+        // 分けながら聴く：分け終わった所が増えたら知らせる
+        if (S.loadedId !== id) loadAudio(id, st.live);
+        else if (S.mix?.live) { S.mix.ready = st.live.ready / st.live.sr; schedule(); }
+      }
     } else if (st.state === "error") {
       stopPolling();
       setPhase("error", st);
     } else {
       setPhase("none");
     }
+  }
+
+  // 分け終わった：取っておいた音はそのまま使い、曲の長さだけ確定させる
+  async function finishLive(id) {
+    try {
+      const r = await fetch(`/stems/${id}/mix.json`, { cache: "no-store" });
+      const m = await r.json();
+      if (S.mix?.id !== id) return;
+      S.mix.frames = m.frames;
+      S.mix.dur = m.frames / m.sr;
+      S.mix.ready = S.mix.dur;
+      S.mix.live = false;
+      renderStatus();
+    } catch { /* 次の status でやり直す */ }
   }
 
   async function prepare() {
@@ -729,7 +771,7 @@ window.Stems = (() => {
   function renderStatus() {
     const box = ui.status;
     const ready = S.phase === "ready" && S.loaded;
-    ui.mixer.classList.toggle("idle", !ready);
+    ui.mixer.classList.toggle("idle", !S.loaded);
     box.hidden = ready;
     box.dataset.phase = S.phase;
     let html = "";
@@ -743,7 +785,7 @@ window.Stems = (() => {
       case "none": {
         S.estFor = state.duration;
         const est = state.duration ? Math.max(1, Math.round((state.duration * 0.5 + 20) / 60)) : 0;
-        html = `<p>この曲はまだ分けていません。${est ? `分けるのに約 ${est} 分かかります。` : ""}一度分ければ、次からはすぐ聴けます。</p>
+        html = `<p>この曲はまだ分けていません。Split を押すと、30 秒ほどで分けた音で聴き始められます${est ? `（全部分け終わるのは約 ${est} 分後）` : ""}。一度分ければ、次からはすぐ聴けます。</p>
                 <button type="button" class="metal-btn stems-go" data-act="prepare">Split</button>`;
         break;
       }
@@ -755,7 +797,9 @@ window.Stems = (() => {
                   <span class="lcd small">${String(pct).padStart(2, "0")}</span>
                   <div class="stems-bar"><i style="width:${pct}%"></i></div>
                 </div>
-                <p>${esc(j.message || "分けています")}… ${remain}再生はそのまま続けられます。終わると分けた音に切り替わります。</p>`;
+                <p>${S.loaded
+                  ? `分けながら再生しています。${remain}まだ分けていない先へ飛ぶと、その部分は元の音で鳴ります。`
+                  : `${esc(j.message || "分けています")}… 最初の部分ができると、分けた音に切り替わります。`}</p>`;
         break;
       }
       case "ready":
