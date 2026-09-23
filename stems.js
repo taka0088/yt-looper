@@ -89,33 +89,8 @@ window.Stems = (() => {
     clock: null,
     offset: 0,         // Sync：耳で合わせたずらし（秒、+ で音が早く出る）。端末ごとに保存
     pollTimer: null,
-    stat: { reanchors: 0, d: null, mean: null, lastWhy: "" },
   };
 
-  // ---------- 一時的な診断：iPhone の中の状態を Mac の分離サーバーの記録に送る ----------
-  function diag(tag, extra = {}) {
-    if (!SERVER) return;
-    const body = JSON.stringify({ tag, t: Math.round(performance.now()), ...extra });
-    fetch(SERVER + "/api/diag", { method: "POST", body, keepalive: true }).catch(() => {});
-  }
-  function snapshot() {
-    const c = S.ctx;
-    const ts = c?.getOutputTimestamp?.();
-    return {
-      ctx: c?.state, sr: c?.sampleRate, owning: S.owning, gen: !!S.gen, on: S.on, rate: state.rate,
-      yt: state.player?.getPlayerState?.(), ytT: +(state.player?.getCurrentTime?.() || 0).toFixed(2),
-      base: c?.baseLatency, out: c?.outputLatency,
-      ts: ts ? { c: +ts.contextTime.toFixed(3), p: Math.round(ts.performanceTime) } : null,
-      lat: c ? +(c.currentTime - heardCtx()).toFixed(3) : null,
-      d: S.stat.d == null ? null : Math.round(S.stat.d * 1000),
-      mean: S.stat.mean == null ? null : Math.round(S.stat.mean * 1000),
-      re: S.stat.reanchors, why: S.stat.lastWhy,
-      chunks: [...S.chunks.values()].filter((k) => k.bufs).length, q: S.queue.length, loading: S.loading,
-      off: Math.round(S.offset * 1000),
-      lv: S.ch.map((k) => k.level.toFixed(2)),
-    };
-  }
-  setInterval(() => { if (S.available && S.loadedId) diag("snap", snapshot()); }, 3000);
 
   // ---------- 設定の保存 ----------
   function loadPrefs() {
@@ -262,8 +237,6 @@ window.Stems = (() => {
     if (navigator.audioSession) navigator.audioSession.type = "playback";
     const AC = window.AudioContext || window.webkitAudioContext;
     S.ctx = new AC();
-    S.ctx.onstatechange = () => diag("ctx", { state: S.ctx.state });
-    diag("graph", { ctx: S.ctx.state, sr: S.ctx.sampleRate, base: S.ctx.baseLatency, out: S.ctx.outputLatency });
     for (const c of S.ch) {
       c.gain = S.ctx.createGain();
       c.analyser = S.ctx.createAnalyser();
@@ -281,7 +254,7 @@ window.Stems = (() => {
     if (e.type === "pointerdown" && e.pointerType !== "mouse") return;
     if (!S.ctx) return;
     if (S.ctx.state !== "running") {
-      S.ctx.resume().catch((err) => diag("resume-ng", { err: `${err.name}: ${err.message}` }));
+      S.ctx.resume().catch(() => {}); // 次に触れたときにまた試す
     }
     if (!S.primed) {
       // 1サンプルの無音を鳴らす（古い iOS はこれで初めて音が出せるようになる）
@@ -317,13 +290,11 @@ window.Stems = (() => {
         live: !!live, ready: (live ? live.ready : m.frames) / m.sr,
       };
       S.loaded = true;
-      diag("loaded", { id, dur: +S.mix.dur.toFixed(1) });
       prefetch();
       updateOwnership();
       renderStatus();
     } catch (err) {
       if (S.loadedId !== id) return;
-      diag("load-ng", { id, err: String(err) });
       setPhase("error", { error: "分けた音を読み込めませんでした" });
     }
   }
@@ -377,7 +348,6 @@ window.Stems = (() => {
         })
         .catch((err) => {
           if (S.chunks.get(i) === k) S.chunks.delete(i); // 次の先読みで取り直す
-          diag("chunk-ng", { i, err: String(err) });
         })
         .finally(() => { S.loading--; pump(); });
     }
@@ -473,7 +443,7 @@ window.Stems = (() => {
 
   // ---------- 鳴らす ----------
   // 曲の位置 t（いま映像に出ている位置）から鳴らし始める。鳴っていれば、短く重ねて乗り換える
-  function begin(t, why) {
+  function begin(t) {
     const ctx = S.ctx;
     if (ctx.state === "suspended") ctx.resume();
     const now = ctx.currentTime;
@@ -491,8 +461,6 @@ window.Stems = (() => {
       return g;
     });
     S.gen = { at, media, rate, next: chunkOf(media), bus, nodes: [] };
-    S.stat.reanchors++;
-    S.stat.lastWhy = why;
     S.settleUntil = performance.now() + SETTLE_MS;
     S.win = null;
     S.clock = null;
@@ -577,7 +545,8 @@ window.Stems = (() => {
 
   function sync() {
     try { syncInner(); } catch (err) {
-      if (!S.syncErr) { S.syncErr = true; diag("sync-err", { err: `${err.name}: ${err.message}`, stack: String(err.stack).slice(0, 400) }); }
+      // 画面の更新（app.js の tick）を止めないよう、ここで受け止める。同じ誤りは1回だけ知らせる
+      if (!S.syncErr) { S.syncErr = true; console.error(err); }
     }
   }
   function syncInner() {
@@ -591,10 +560,10 @@ window.Stems = (() => {
         if (S.gen) stopGen();
       } else if (!S.gen) {
         prefetch();
-        begin(ytNow(), "start");
+        begin(ytNow());
       } else if (S.gen.rate !== state.rate) {
         prefetch();                       // 速度が変わった：新しい速度の音に乗り換える
-        begin(ytNow(), "rate");
+        begin(ytNow());
       } else {
         follow();
       }
@@ -608,24 +577,22 @@ window.Stems = (() => {
     const now = performance.now();
     if (now < S.settleUntil) return;
     const d = (heardMedia() - ytNow()) / S.gen.rate - S.offset; // 聞こえる音のズレ（実時間の秒）
-    S.stat.d = d;
-    if (Math.abs(d) > HARD) { begin(ytNow(), "hard " + Math.round(d * 1000)); return; }
+    if (Math.abs(d) > HARD) { begin(ytNow()); return; }
     if (!S.win) S.win = { start: now, sum: 0, n: 0 };
     S.win.sum += d;
     S.win.n++;
     if (now - S.win.start < WINDOW_MS) return;
     const mean = S.win.sum / S.win.n;
     S.win = null;
-    S.stat.mean = mean;
     if (Math.abs(mean) <= TOL || now - (S.fixedAt || 0) < MIN_GAP_MS) return;
     S.fixedAt = now;
-    begin(ytNow(), "mean " + Math.round(mean * 1000));
+    begin(ytNow());
   }
 
   // ルーパー側のシーク（A–B ループの折り返しなど）
   function seek(t) {
     S.clock = null;
-    if (S.owning && S.gen) begin(t, "seek");
+    if (S.owning && S.gen) begin(t);
   }
 
   // ---------- Sync：音のタイミングを耳で合わせる ----------
@@ -633,7 +600,7 @@ window.Stems = (() => {
     S.offset = clamp(Math.round(v * 1000) / 1000, -OFFSET_MAX, OFFSET_MAX);
     renderSync();
     savePrefs();
-    if (S.owning && S.gen) begin(ytNow(), "offset");
+    if (S.owning && S.gen) begin(ytNow());
   }
   function renderSync() {
     const ms = Math.round(S.offset * 1000);
@@ -988,7 +955,7 @@ window.Stems = (() => {
       return ch.map((x) => { const y = new Float32Array(n); y.set(x.subarray(lead, lead + n)); return y; });
     }));
     L.raw.set(i, p);
-    p.catch((err) => { L.raw.delete(i); diag("local-ng", { i, err: String(err) }); });
+    p.catch(() => L.raw.delete(i)); // 次に要るときに読み直す
     while (L.raw.size > 12) L.raw.delete(L.raw.keys().next().value);
     return p;
   }
@@ -1180,7 +1147,6 @@ window.Stems = (() => {
     const hasSongs = LOCAL_OK ? await initLocal() : false;
     if (LOCAL_OK) renderMac();
     const ok = await hello();
-    if (ok) diag("init", { ua: navigator.userAgent, audioSession: !!navigator.audioSession, https: LOCAL_OK });
     if (ok || hasSongs) activate();
   }
 
@@ -1188,13 +1154,10 @@ window.Stems = (() => {
   async function hello() {
     S.server = false;
     if (!SERVER) return false;
-    S.macErr = "";
     try {
       await api("/api/hello", { timeout: LOCAL_OK ? 8000 : 1500 });
       S.server = true;
-    } catch (err) {
-      S.macErr = err?.name === "AbortError" ? "時間切れ" : String(err?.message || err); // 一時的：原因調べ
-    }
+    } catch { /* つながらない */ }
     if (LOCAL_OK) renderMac();
     return S.server;
   }
@@ -1204,7 +1167,7 @@ window.Stems = (() => {
     if (document.activeElement !== ui.macAddr) ui.macAddr.value = SERVER ? SERVER.replace(/^https:\/\//, "") : "";
     ui.macState.textContent = !SERVER ? "入れると、Mac で分けた曲をこのアプリから直接聴いたり保存したりできます。"
       : S.server ? "Mac につながっています。"
-      : `Mac につながりません。Mac の YT LOOPER と、この端末の Tailscale がオンか確かめてください（保存した曲はそのまま聴けます）。${S.macErr ? `［${S.macErr}］` : ""}`;
+      : "Mac につながりません。Mac の YT LOOPER と、この端末の Tailscale がオンか確かめてください（保存した曲はそのまま聴けます）。";
     ui.macState.dataset.ok = S.server ? "1" : "";
   }
   ui.macAddr?.addEventListener("change", async () => {
