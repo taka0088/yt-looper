@@ -16,9 +16,15 @@ window.Stems = (() => {
   ];
   const STORE_KEY = "ytlooper:stems";
   const UNITY = 0.75;    // フェーダーのこの位置が 0 dB（一番上は約 +5 dB）
-  const HARD = 0.25;     // これ以上ズレたら飛ばして合わせる
-  const DEAD = 0.012;    // これ以内なら速度は触らない（伸縮処理で音色を変えないため）
-  const SPREAD = 0.04;   // パート同士がこれ以上離れたら揃え直す
+  // 飛ばして合わせると、iPhone では鳴り出すまでしばらく無音になり、しかも currentTime が粗くズレを大きく見せる。
+  // 再生速度はズレ直しに使わない（iPhone では速度を変え続けると Web Audio への音が止まる）。
+  // 一度合わせればズレはほとんど増えない（実測 1分で 5ms）ので、平均のズレが大きいときだけ飛ばして合わせる
+  const TOL = 0.08;        // 平均でこれ以上ずれていたら合わせ直す
+  const HARD = 1.0;        // これ以上ずれたら平均を待たずに合わせ直す
+  const WINDOW_MS = 1500;  // ズレはこの時間の平均で判断する（iPhone の currentTime は粗い）
+  const MIN_GAP_MS = 3000; // 合わせ直しはこの間隔より詰めない
+  const SPREAD = 0.5;      // パート同士がこれ以上離れたら揃え直す
+  const SETTLE_MS = 800;   // 飛ばしたあと、鳴り出すまでズレの判定を休む時間
 
   const $ = (id) => document.getElementById(id);
   const ui = {
@@ -41,6 +47,7 @@ window.Stems = (() => {
     ch: PARTS.map((p) => ({ ...p, pos: UNITY, mute: false, solo: false, level: 0 })),
     clock: null,
     drift: 0,
+    seekLead: 0,       // 飛ばすときに先へ飛ばす秒数（平均のズレから学習し、端末ごとに保存）
     pollTimer: null,
   };
 
@@ -62,8 +69,24 @@ window.Stems = (() => {
         return `${a.paused ? "P" : ">"}${a.readyState}/${a.currentTime.toFixed(1)}${a.muted ? "/m" : ""}${a.error ? "/E" + a.error.code : ""}`;
       }),
       lv: S.ch.map((c) => c.level.toFixed(2)),
+      gain: S.ch.map((c) => (c.gain ? c.gain.gain.value.toFixed(2) : "-")),
+      mix: S.ch.map((c) => `${c.pos.toFixed(2)}${c.mute ? "M" : ""}${c.solo ? "S" : ""}`),
+      raw: S.ch.map((c) => {
+        if (!c.analyser) return "-";
+        c.analyser.getFloatTimeDomainData(c.buf);
+        let p = 0;
+        for (const v of c.buf) p = Math.max(p, Math.abs(v));
+        return p.toFixed(3);
+      }),
+      raf: rafCount,
+      seeks: S.seeks || 0,
+      lead: +S.seekLead.toFixed(2),
+      d: S.playing ? +((S.ch[0].audio.currentTime - state.player.getCurrentTime()) * 1000).toFixed(0) : null,
     };
   }
+  let rafCount = 0;
+  const countFrames = () => { rafCount++; requestAnimationFrame(countFrames); };
+  requestAnimationFrame(countFrames);
   setInterval(() => { if (S.available && S.loadedId) diag("snap", snapshot()); }, 3000);
 
   // ---------- 設定の保存 ----------
@@ -71,6 +94,7 @@ window.Stems = (() => {
     try {
       const p = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
       if (typeof p.on === "boolean") S.on = p.on;
+      if (Number.isFinite(p.seekLead)) S.seekLead = clamp(p.seekLead, 0, 1.5);
       for (const c of S.ch) {
         const q = p.parts?.[c.id];
         if (!q) continue;
@@ -82,7 +106,7 @@ window.Stems = (() => {
   function savePrefs() {
     const parts = {};
     for (const c of S.ch) parts[c.id] = { pos: c.pos, mute: c.mute, solo: c.solo };
-    try { localStorage.setItem(STORE_KEY, JSON.stringify({ on: S.on, parts })); } catch { /* 同上 */ }
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ on: S.on, parts, seekLead: S.seekLead })); } catch { /* 同上 */ }
   }
 
   // ---------- 音量の換算 ----------
@@ -203,20 +227,9 @@ window.Stems = (() => {
   }
 
   // ---------- 音の配線 ----------
-  function ensureAudio() {
-    for (const c of S.ch) {
-      if (c.audio) continue;
-      const a = new Audio();
-      a.preload = "auto";
-      a.preservesPitch = true;
-      a.webkitPreservesPitch = true;
-      a.playsInline = true;
-      c.audio = a;
-    }
-  }
-
-  // 音量・メーターの処理系（Web Audio）。iPhone では画面に触れた操作の中で作らないと無音になることが
-  // あるので、unlock の中でだけ作る。作るまでは YouTube の音のまま鳴らしておく
+  // 音量・メーターの処理系（Web Audio）。
+  // 必ず「Web Audio につないでから src を入れる」。音を読み込んだあとでつなぐと、Chrome では無音になる。
+  // 処理系はここ（操作の外）で作ってよく、画面に触れた操作の中で resume するだけでよい（iPhone で確認済み）
   function ensureGraph() {
     if (S.ctx) return;
     // iPhone のマナーモードでも鳴るよう「再生用の音」として扱わせる（Safari 16.4 以降）
@@ -226,7 +239,12 @@ window.Stems = (() => {
     S.ctx.onstatechange = () => diag("ctx", { state: S.ctx.state });
     diag("graph", { ctx: S.ctx.state, audioSession: navigator.audioSession?.type || null });
     for (const c of S.ch) {
-      const src = S.ctx.createMediaElementSource(c.audio);
+      const a = new Audio();
+      a.preload = "auto";
+      a.preservesPitch = true;
+      a.webkitPreservesPitch = true;
+      a.playsInline = true;
+      const src = S.ctx.createMediaElementSource(a);
       c.gain = S.ctx.createGain();
       c.analyser = S.ctx.createAnalyser();
       c.analyser.fftSize = 512;
@@ -234,6 +252,7 @@ window.Stems = (() => {
       src.connect(c.gain);
       c.gain.connect(S.ctx.destination);
       c.gain.connect(c.analyser);
+      c.audio = a;
     }
     applyGains();
   }
@@ -244,8 +263,7 @@ window.Stems = (() => {
   // マウスのときだけ認められるので、指の pointerdown では何もしない（ここで失敗すると次の機会を逃す）
   function unlock(e) {
     if (e.type === "pointerdown" && e.pointerType !== "mouse") return;
-    if (!S.ch[0].audio?.src) return;
-    ensureGraph();
+    if (!S.ctx) return;
     const pending = S.ch.filter((c) => !c.unlocked && c.audio.src).length;
     if (S.ctx.state !== "running" || pending) diag("unlock", { type: e.type, pt: e.pointerType, ctx: S.ctx.state, pending });
     if (S.ctx.state !== "running") S.ctx.resume().catch((err) => diag("resume-ng", { err: `${err.name}: ${err.message}` }));
@@ -263,7 +281,7 @@ window.Stems = (() => {
   }
 
   function loadAudio(id) {
-    ensureAudio();
+    ensureGraph();
     S.loaded = false;
     S.loadedId = id;
     pauseAll();
@@ -314,11 +332,28 @@ window.Stems = (() => {
     if (!S.clock || raw !== S.clock.raw) S.clock = { raw, at: now };
     return S.clock.raw + Math.min(now - S.clock.at, 0.1) * state.rate;
   }
+  // 分けた音の再生位置も同じように補う。iPhone の Safari は currentTime を粗い間隔でしか更新しないので、
+  // 生の値で比べると「ずれて見える → 飛ばす → 鳴る前にまた飛ばす」を繰り返し、音が一度も出なくなる
+  function audioNow() {
+    const a = S.ch[0].audio;
+    const raw = a.currentTime;
+    const now = performance.now() / 1000;
+    if (!S.aclock || raw !== S.aclock.raw) S.aclock = { raw, at: now };
+    return S.aclock.raw + Math.min(now - S.aclock.at, 0.3) * a.playbackRate;
+  }
+  // 飛ばして合わせた直後は、鳴り出すまで待つ（その間はズレを判定しない）
+  function settle() {
+    S.settleUntil = performance.now() + SETTLE_MS;
+    S.win = null;
+    S.clock = null;
+    S.aclock = null;
+  }
 
   function startAll(t) {
     if (S.ctx.state === "suspended") S.ctx.resume();
     S.playing = true;
-    S.drift = 0;
+    t += S.seekLead;
+    settle();
     diag("start", { t: +t.toFixed(2), ...snapshot() });
     for (const c of S.ch) {
       c.audio.currentTime = t;
@@ -337,16 +372,21 @@ window.Stems = (() => {
     S.clock = null;
     for (const c of S.ch) c.audio?.pause();
   }
-  function seekAll(t) {
-    S.drift = 0;
-    S.clock = null;
-    for (const c of S.ch) c.audio.currentTime = t;
+  // 飛ばすと、新しい位置の音を取りに行くあいだ鳴り出しが遅れる（iPhone で 0.3〜0.6 秒）。
+  // その間も映像は進むので、遅れるぶん先へ飛ばす。先へ飛ばす量は着地のズレから学習する
+  function seekAll(t, { ahead = true } = {}) {
+    S.seeks = (S.seeks || 0) + 1;
+    settle();
+    const to = Math.max(0, t + (ahead ? S.seekLead : 0));
+    for (const c of S.ch) c.audio.currentTime = to;
   }
 
   function owns() { return S.owning; }
 
   function updateOwnership() {
-    const want = S.available && S.on && S.loaded && !!S.ctx && S.loadedId === state.videoId && !!state.player?.mute;
+    // 処理系が動き出す（最初に画面に触れる）までは YouTube の音のまま鳴らす
+    const want = S.available && S.on && S.loaded && S.ctx?.state === "running"
+      && S.loadedId === state.videoId && !!state.player?.mute;
     if (want === S.owning) return;
     S.owning = want;
     if (want) {
@@ -359,6 +399,11 @@ window.Stems = (() => {
   }
 
   function sync() {
+    try { syncInner(); } catch (err) {
+      if (!S.syncErr) { S.syncErr = true; diag("sync-err", { err: `${err.name}: ${err.message}`, stack: String(err.stack).slice(0, 400) }); }
+    }
+  }
+  function syncInner() {
     if (!S.available) return;
     updateOwnership();
     if (S.phase === "none" && state.duration !== S.estFor) renderStatus(); // 長さが分かったら所要時間を出す
@@ -377,24 +422,43 @@ window.Stems = (() => {
   }
 
   function follow() {
-    const yt = ytNow();
+    const now = performance.now();
     const lead = S.ch[0].audio;
-    const d = lead.currentTime - yt;
-    if (Math.abs(d) > HARD) { seekAll(yt); return; }
-    S.drift = S.drift * 0.85 + d * 0.15;
-    const base = state.rate;
-    // 少しだけ速度を変えて、音を飛ばさずに寄せる
-    const r = Math.abs(S.drift) > DEAD ? base * (1 + clamp(-S.drift * 0.5, -0.02, 0.02)) : base;
     for (const c of S.ch) {
-      if (c.audio.playbackRate !== r) c.audio.playbackRate = r;
-      if (c !== S.ch[0] && Math.abs(c.audio.currentTime - lead.currentTime) > SPREAD) {
+      // 速度は SPEED で変えたときだけ合わせる
+      if (c.audio.playbackRate !== state.rate) c.audio.playbackRate = state.rate;
+      // パート同士のずれ直しは、大きくずれたときだけ・1本あたり2秒に1回まで
+      if (c !== lead && now > (c.fixedAt || 0) + 2000
+          && Math.abs(c.audio.currentTime - lead.currentTime) > SPREAD) {
+        c.fixedAt = now;
         c.audio.currentTime = lead.currentTime;
       }
     }
+    if (now < S.settleUntil) return;
+
+    const yt = ytNow();
+    const d = audioNow() - yt;
+    if (Math.abs(d) > HARD) { seekAll(yt); return; }
+
+    if (!S.win) S.win = { start: now, sum: 0, n: 0 };
+    S.win.sum += d;
+    S.win.n++;
+    if (now - S.win.start < WINDOW_MS) return;
+    const mean = S.win.sum / S.win.n;
+    S.win = null;
+    S.drift = mean;   // 記録用
+    if (Math.abs(mean) <= TOL || now - (S.fixedAt || 0) < MIN_GAP_MS) return;
+
+    // 平均で mean だけずれて鳴っている。次からはそのぶん見越して飛ばす
+    S.seekLead = clamp(S.seekLead - mean, 0, 1.5);
+    savePrefs();
+    S.fixedAt = now;
+    seekAll(yt);
   }
 
+  // ルーパー側のシーク（A–B ループの折り返しなど）。映像も同じだけ止まって読み込むので、先へは飛ばさない
   function seek(t) {
-    if (S.owning && S.loaded) seekAll(t);
+    if (S.owning && S.loaded) seekAll(t, { ahead: false });
   }
 
   // メーター：いま実際に鳴っている音（フェーダー・消音のあと）
