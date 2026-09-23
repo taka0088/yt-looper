@@ -95,15 +95,13 @@
             <span class="toggle-label">字幕を表示する</span>
           </label>
         </div>
-        <!-- 公開版だけ：Mac で「iPhone に保存」した曲を取り込む（stems.js が出す） -->
+        <!-- 公開版だけ：この端末に保存した曲の一覧と、Mac のアドレス（stems.js が出す） -->
         <div class="local-stems" id="localStems" hidden>
           <div class="local-head">
             <span>分けた曲（Mac なしで聴く）</span>
-            <button type="button" class="metal-btn" id="localImport">取り込む</button>
           </div>
           <ul class="local-list" id="localList"></ul>
           <p class="local-total" id="localTotal"></p>
-          <input type="file" id="localFile" multiple hidden>
           <label class="settings-row mac-row">
             <span>Mac のアドレス（Tailscale）</span>
             <input id="macAddr" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="例：macbook-air.tail1234.ts.net">
@@ -269,9 +267,9 @@
           <button type="button" class="metal-btn" id="syncLater" title="音が映像より先に聞こえるときに押す（押し続けると続けて動く）">遅く</button>
           <button type="button" class="metal-btn stems-sync-reset" id="syncReset" title="ずらしをやめる">0 に戻す</button>
         </div>
-        <!-- Mac 版だけ：分けた曲を1つのファイル（.ytstems）にして保存する。公開版に取り込むと Mac なしで聴ける -->
+        <!-- 公開版だけ：Mac で分けた曲をこの端末（アプリの中）に保存する -->
         <div class="stems-export" id="stemsExport" hidden>
-          <a class="metal-btn" id="stemsExportBtn" href="#">iPhone に保存</a>
+          <button type="button" class="metal-btn" id="stemsExportBtn">iPhone に保存</button>
           <p id="stemsExportNote"></p>
         </div>
       </article>

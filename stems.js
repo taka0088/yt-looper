@@ -5,7 +5,7 @@
 //    Mac の http 版からは同じ Mac の 8766 番へ。公開版（https）からは、設定に入れた Mac のアドレス
 //    （Tailscale の https://<Mac の名前>.ts.net → 8766 番）へ
 //  ・この端末に保存した曲（公開版だけ。IndexedDB）。Mac がなくても聴ける。
-//    公開版で Mac につながっているときの「iPhone に保存」、または .ytstems ファイルの「取り込む」で入る
+//    公開版で Mac につながっているときの「iPhone に保存」で入る
 // 両方にある曲は、この端末のほうで鳴らす
 // app.js の state / preroll / clamp / fmt / toast を使う。
 
@@ -62,7 +62,6 @@ window.Stems = (() => {
     power: $("stemsPower"), led: $("stemsLed"), clear: $("stemsAllOn"), flat: $("stemsFlat"),
     exportRow: $("stemsExport"), exportBtn: $("stemsExportBtn"),
     localWrap: $("localStems"), localList: $("localList"), localTotal: $("localTotal"),
-    localImport: $("localImport"), localFile: $("localFile"),
     macAddr: $("macAddr"), macState: $("macState"), exportNote: $("stemsExportNote"),
     sync: $("stemsSync"), syncLcd: $("syncLcd"), earlier: $("syncEarlier"), later: $("syncLater"), syncReset: $("syncReset"),
     syncBtn: $("syncBtn"), syncPop: $("syncPop"), syncClose: $("syncClose"),
@@ -815,8 +814,7 @@ window.Stems = (() => {
                 <button type="button" class="metal-btn stems-go" data-act="prepare">Retry</button>`;
         break;
       case "absent":
-        html = `<p>この曲はこの端末に入っていません。Mac につながっているときに分けて「iPhone に保存」すると、Mac がなくても分けた音で聴けます。</p>
-                <button type="button" class="metal-btn stems-go" data-act="import">取り込む</button>`;
+        html = `<p>この曲はこの端末に入っていません。Mac につながっているときに分けて「iPhone に保存」すると、Mac がなくても分けた音で聴けます。</p>`;
         break;
       case "offline":
         html = `<p>分離サーバーにつながりません。YT LOOPER.app から開き直すと立ち上がります。</p>
@@ -847,7 +845,6 @@ window.Stems = (() => {
     const act = e.target.closest("[data-act]")?.dataset.act;
     if (act === "prepare") prepare();
     else if (act === "recheck") (S.available ? checkVideo(S.videoId) : init());
-    else if (act === "import") ui.localFile.click();
   });
   ui.power.addEventListener("click", () => {
     S.on = !S.on;
@@ -865,7 +862,7 @@ window.Stems = (() => {
     mixChanged();
   });
 
-  // ---------- この端末に取り込んだ曲（Mac なしで聴く） ----------
+  // ---------- この端末に保存した曲（Mac なしで聴く） ----------
   // .ytstems：先頭 "YTSTEMS1"、4バイト（見出しの長さ）、見出し JSON、そのあと 2秒ずつ・パートごとの FLAC。
   // FLAC には前後に margin 秒の余白があり、読み込んだあと切り落としてつなぐ（Mac の stem_server.py が作る）
   const Local = (() => {
@@ -1021,32 +1018,6 @@ window.Stems = (() => {
     });
   }
 
-  // 取り込む：Mac の「iPhone に保存」で保存したファイルを選ぶ
-  async function importFiles(files) {
-    let ok = 0;
-    for (const f of files) {
-      try {
-        const top = new Uint8Array(await f.slice(0, 12).arrayBuffer());
-        if (new TextDecoder().decode(top.subarray(0, 8)) !== "YTSTEMS1") throw new Error("YT LOOPER の曲のファイルではありません");
-        const hlen = new DataView(top.buffer).getUint32(8, true);
-        const h = JSON.parse(new TextDecoder().decode(await f.slice(12, 12 + hlen).arrayBuffer()));
-        toast(`取り込んでいます：${h.title}`);
-        await Local.put({ id: h.id, title: h.title, dur: h.frames / h.sr, size: f.size, added: Date.now(), head: h, base: 12 + hlen, blob: f });
-        ok++;
-      } catch (err) {
-        const full = /quota/i.test(err?.name || "") || /quota/i.test(String(err));
-        toast(full ? "iPhone の空き容量が足りません" : `取り込めませんでした：${err.message || err}`);
-      }
-    }
-    if (!ok) return;
-    navigator.storage?.persist?.().catch(() => {}); // 端末がデータを勝手に消さないよう頼む
-    const songs = await Local.all();
-    renderLocalList(songs);
-    toast(`${ok} 曲を取り込みました`);
-    if (!S.available) activate();
-    else if (S.videoId && !S.loaded) onVideo(S.videoId);
-  }
-
   function renderLocalList(songs) {
     songs.sort((a, b) => b.added - a.added);
     const total = songs.reduce((t, s) => t + s.size, 0);
@@ -1058,16 +1029,10 @@ window.Stems = (() => {
       </li>`).join("");
     ui.localTotal.textContent = songs.length
       ? `${songs.length} 曲・合計 ${mb(total)}`
-      : "まだありません。Mac の YT LOOPER で分けた曲を「iPhone に保存」して、ここから取り込むと、Mac がなくても分けた音で聴けます。";
+      : "まだありません。Mac につながっているときに曲を開き、STEMS の「iPhone に保存」を押すと、ここに入ります。";
   }
   const mb = (n) => (n >= 1e9 ? (n / 1e9).toFixed(1) + "GB" : Math.round(n / 1e6) + "MB");
 
-  ui.localImport?.addEventListener("click", () => ui.localFile.click());
-  ui.localFile?.addEventListener("change", () => {
-    const files = [...ui.localFile.files];
-    ui.localFile.value = "";
-    if (files.length) importFiles(files);
-  });
   ui.localList?.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-del]");
     if (!b) return;
@@ -1077,23 +1042,15 @@ window.Stems = (() => {
     if (S.videoId === b.dataset.del) { unloadAudio(); route(b.dataset.del); }
   });
 
-  // Mac 版：いまの曲を iPhone に持ち出すファイルにして保存する
-  // 公開版（この端末に保存できる）ではアプリの中へ直接保存し、Mac の http 版ではファイルとしてダウンロードさせる
+  // 公開版：Mac で分けた曲をこの端末（アプリの中）に保存する。Mac の http 版には出さない
   function renderExport() {
-    const show = S.server && S.phase === "ready" && S.loaded && S.mix && !S.mix.live && !S.mix.local && !S.mix.saved;
+    const show = LOCAL_OK && S.server && S.phase === "ready" && S.loaded && S.mix && !S.mix.live && !S.mix.local && !S.mix.saved;
     ui.exportRow.hidden = !show;
-    if (!show) return;
-    ui.exportBtn.href = `${SERVER}/api/export?id=${encodeURIComponent(S.mix.id)}`;
-    if (!S.saving) {
-      ui.exportBtn.textContent = "iPhone に保存";
-      ui.exportNote.textContent = LOCAL_OK
-        ? "この端末に保存すると、Mac がなくても分けた音で聴けます（5分の曲で約130MB）。"
-        : "この曲を1つのファイルにして保存します。公開版の YT LOOPER の「設定」→「取り込む」で選ぶと、Mac がなくても分けた音で聴けます。";
-    }
+    if (!show || S.saving) return;
+    ui.exportBtn.textContent = "iPhone に保存";
+    ui.exportNote.textContent = "この端末に保存すると、Mac がなくても分けた音で聴けます（5分の曲で約130MB）。";
   }
-  ui.exportBtn?.addEventListener("click", (e) => {
-    if (!LOCAL_OK) { toast("ファイルを作っています。数秒で保存が始まります"); return; }
-    e.preventDefault();
+  ui.exportBtn?.addEventListener("click", () => {
     if (!S.saving) saveToDevice(S.mix.id);
   });
 
