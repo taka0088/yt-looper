@@ -13,11 +13,11 @@ window.Stems = (() => {
   // https の公開版からは http の Mac に届かない（混在コンテンツ）ので、最初から探さない
   const LOCAL_OK = location.protocol === "https:" && !!window.indexedDB; // この端末に曲を保存できる（公開版）
   const MAC_KEY = "ytlooper:mac";
-  // 公開版で入れる Mac のアドレスを https://〜 の形にそろえる
+  // 公開版で入れる Mac のアドレスを https://〜 の形にそろえる。公開版（https）からは http には届かない
+  // （iPhone が止める）ので、http:// と入れられても https:// にする。空白や末尾の / も除く
   const normMac = (s) => {
-    s = String(s || "").trim().replace(/\/+$/, "");
-    if (!s) return null;
-    return /^https?:\/\//.test(s) ? s : "https://" + s;
+    s = String(s || "").replace(/\s+/g, "").replace(/^[a-z]+:\/\//i, "").replace(/\/.*$/, "");
+    return s ? "https://" + s.toLowerCase() : null;
   };
   let SERVER = location.protocol === "http:" ? `http://${location.hostname}:8766`
     : (() => { try { return normMac(localStorage.getItem(MAC_KEY)); } catch { return null; } })();
@@ -1194,13 +1194,6 @@ window.Stems = (() => {
       S.server = true;
     } catch (err) {
       S.macErr = err?.name === "AbortError" ? "時間切れ" : String(err?.message || err); // 一時的：原因調べ
-      // 一時的：どの形の呼びかけなら Mac に届くかを試す（Mac の記録で見る）
-      if (LOCAL_OK) {
-        fetch(SERVER + "/api/hello?probe=nocors", { mode: "no-cors" }).then(() => { S.macErr += "・n〇"; renderMac(); }, () => { S.macErr += "・n×"; renderMac(); });
-        const img = new Image();
-        img.onload = img.onerror = () => { S.macErr += "・i済"; renderMac(); };
-        img.src = SERVER + "/api/hello?probe=img&t=" + Date.now();
-      }
     }
     if (LOCAL_OK) renderMac();
     return S.server;
