@@ -1425,6 +1425,8 @@ html:has(.app[data-fs="1"]) { overflow: hidden; }
 .local-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text, #e9e4d8); }
 .local-meta { color: var(--muted); font-variant-numeric: tabular-nums; }
 .local-total { margin: 8px 0 0; font-size: 11px; line-height: 1.6; color: #6b6f78; }
+.mac-row { margin-top: 12px; }
+.mac-state[data-ok="1"] { color: #7fd07a; }
 
 .build { margin: 10px 0 0; font-size: 11px; color: #6b6f78; letter-spacing: .04em; }
 

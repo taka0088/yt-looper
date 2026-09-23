@@ -1,14 +1,26 @@
 "use strict";
 // STEMS：曲を6パートに分けて聴く。YouTube の映像は無音で流し、分けた音を映像の時刻に合わせて鳴らす。
-// 2つの出方がある:
-//  ・Mac の http 版：分離サーバー（~/YouTubeパート分離、8766 番）が見つかったとき。曲を分けて、そこから鳴らす
-//  ・公開版（https）：Mac の「iPhone に保存」で書き出したファイル（.ytstems）をこの端末に取り込んだとき。
-//    Mac がなくても、取り込んだ曲は分けた音で聴ける（端末の IndexedDB に保存）
+// 分けた音の出どころは2つ:
+//  ・Mac の分離サーバー（~/YouTubeパート分離、8766 番）。曲を分けて、そこから鳴らす。
+//    Mac の http 版からは同じ Mac の 8766 番へ。公開版（https）からは、設定に入れた Mac のアドレス
+//    （Tailscale の https://<Mac の名前>.ts.net → 8766 番）へ
+//  ・この端末に保存した曲（公開版だけ。IndexedDB）。Mac がなくても聴ける。
+//    公開版で Mac につながっているときの「iPhone に保存」、または .ytstems ファイルの「取り込む」で入る
+// 両方にある曲は、この端末のほうで鳴らす
 // app.js の state / preroll / clamp / fmt / toast を使う。
 
 window.Stems = (() => {
   // https の公開版からは http の Mac に届かない（混在コンテンツ）ので、最初から探さない
-  const SERVER = location.protocol === "http:" ? `http://${location.hostname}:8766` : null;
+  const LOCAL_OK = location.protocol === "https:" && !!window.indexedDB; // この端末に曲を保存できる（公開版）
+  const MAC_KEY = "ytlooper:mac";
+  // 公開版で入れる Mac のアドレスを https://〜 の形にそろえる
+  const normMac = (s) => {
+    s = String(s || "").trim().replace(/\/+$/, "");
+    if (!s) return null;
+    return /^https?:\/\//.test(s) ? s : "https://" + s;
+  };
+  let SERVER = location.protocol === "http:" ? `http://${location.hostname}:8766`
+    : (() => { try { return normMac(localStorage.getItem(MAC_KEY)); } catch { return null; } })();
   const VER = (document.currentScript?.src.match(/\?v=[^&]+/) || [""])[0]; // 付属ファイルも同じ版で読む
   const PARTS = [
     { id: "drums", name: "Drums" },
@@ -51,6 +63,7 @@ window.Stems = (() => {
     exportRow: $("stemsExport"), exportBtn: $("stemsExportBtn"),
     localWrap: $("localStems"), localList: $("localList"), localTotal: $("localTotal"),
     localImport: $("localImport"), localFile: $("localFile"),
+    macAddr: $("macAddr"), macState: $("macState"), exportNote: $("stemsExportNote"),
     sync: $("stemsSync"), syncLcd: $("syncLcd"), earlier: $("syncEarlier"), later: $("syncLater"), syncReset: $("syncReset"),
     syncBtn: $("syncBtn"), syncPop: $("syncPop"), syncClose: $("syncClose"),
   };
@@ -58,7 +71,7 @@ window.Stems = (() => {
   const S = {
     available: false,
     videoId: null,
-    mode: SERVER ? "server" : "local", // server＝Mac の分離サーバーから / local＝この端末に取り込んだ曲から
+    server: false,     // Mac の分離サーバーにつながっている
     phase: "idle",     // idle | checking | none | working | ready | error | offline | absent（この端末に無い）
     job: null,
     loadedId: null,    // 音を読み込み済みの動画
@@ -292,13 +305,13 @@ window.Stems = (() => {
     try {
       let m = live;
       if (!m) {
-        const r = await fetch(`/stems/${id}/mix.json`, { cache: "no-store" });
+        const r = await fetch(`${SERVER}/stems/${id}/mix.json`, { cache: "no-store" });
         if (!r.ok) throw new Error("HTTP " + r.status);
         m = await r.json();
       }
       if (S.loadedId !== id) return;
       S.mix = {
-        id, url: `/stems/${id}/mix.pcm`, sr: m.sr, frames: m.frames, dur: m.frames / m.sr, channels: m.channels,
+        id, url: `${SERVER}/stems/${id}/mix.pcm`, sr: m.sr, frames: m.frames, dur: m.frames / m.sr, channels: m.channels,
         index: S.ch.map((c) => m.parts.indexOf(c.id)),
         rate: 1,
         live: !!live, ready: (live ? live.ready : m.frames) / m.sr,
@@ -740,7 +753,7 @@ window.Stems = (() => {
   // 分け終わった：取っておいた音はそのまま使い、曲の長さだけ確定させる
   async function finishLive(id) {
     try {
-      const r = await fetch(`/stems/${id}/mix.json`, { cache: "no-store" });
+      const r = await fetch(`${SERVER}/stems/${id}/mix.json`, { cache: "no-store" });
       const m = await r.json();
       if (S.mix?.id !== id) return;
       S.mix.frames = m.frames;
@@ -835,7 +848,7 @@ window.Stems = (() => {
                 <button type="button" class="metal-btn stems-go" data-act="prepare">Retry</button>`;
         break;
       case "absent":
-        html = `<p>この曲はこの端末に入っていません。Mac の YT LOOPER で分けて「iPhone に保存」したファイルを取り込むと、Mac がなくても分けた音で聴けます。</p>
+        html = `<p>この曲はこの端末に入っていません。Mac につながっているときに分けて「iPhone に保存」すると、Mac がなくても分けた音で聴けます。</p>
                 <button type="button" class="metal-btn stems-go" data-act="import">取り込む</button>`;
         break;
       case "offline":
@@ -914,22 +927,30 @@ window.Stems = (() => {
   })();
 
   async function initLocal() {
-    if (!window.indexedDB) return;
     ui.localWrap.hidden = false;
     let songs = [];
     try { songs = await Local.all(); } catch { /* 保存場所が使えない（プライベートブラウズなど） */ }
     renderLocalList(songs);
-    if (songs.length) activate();
+    return songs.length > 0;
   }
 
-  async function loadLocal(id) {
+  // この端末に保存してあればそこから、なければ Mac から
+  async function route(id) {
+    if (LOCAL_OK) {
+      let rec = null;
+      try { rec = await Local.get(id); } catch { /* 無いものとして扱う */ }
+      if (S.videoId !== id) return;
+      if (rec) return loadLocal(id, rec);
+    }
+    if (S.server) return checkVideo(id);
+    setPhase("absent");
+  }
+
+  function loadLocal(id, rec) {
     ensureGraph();
     unloadAudio();
+    stopPolling();
     S.loadedId = id;
-    let rec = null;
-    try { rec = await Local.get(id); } catch { /* 無いものとして扱う */ }
-    if (S.loadedId !== id) return;
-    if (!rec) { S.loadedId = null; setPhase("absent"); return; }
     const h = rec.head;
     S.mix = {
       id, sr: h.sr, frames: h.frames, dur: h.frames / h.sr, channels: h.parts.length * 2,
@@ -1086,37 +1107,112 @@ window.Stems = (() => {
     if (!confirm(`「${b.dataset.title}」をこの端末から削除しますか？\n（Mac で分けた曲はそのまま残ります）`)) return;
     await Local.del(b.dataset.del);
     renderLocalList(await Local.all());
-    if (S.loadedId === b.dataset.del) { unloadAudio(); setPhase("absent"); }
+    if (S.videoId === b.dataset.del) { unloadAudio(); route(b.dataset.del); }
   });
 
   // Mac 版：いまの曲を iPhone に持ち出すファイルにして保存する
+  // 公開版（この端末に保存できる）ではアプリの中へ直接保存し、Mac の http 版ではファイルとしてダウンロードさせる
   function renderExport() {
-    const show = S.mode === "server" && S.phase === "ready" && S.loaded && !S.mix?.live;
+    const show = S.server && S.phase === "ready" && S.loaded && S.mix && !S.mix.live && !S.mix.local && !S.mix.saved;
     ui.exportRow.hidden = !show;
-    if (show) ui.exportBtn.href = `${SERVER}/api/export?id=${encodeURIComponent(S.mix.id)}`;
+    if (!show) return;
+    ui.exportBtn.href = `${SERVER}/api/export?id=${encodeURIComponent(S.mix.id)}`;
+    if (!S.saving) {
+      ui.exportBtn.textContent = "iPhone に保存";
+      ui.exportNote.textContent = LOCAL_OK
+        ? "この端末に保存すると、Mac がなくても分けた音で聴けます（5分の曲で約130MB）。"
+        : "この曲を1つのファイルにして保存します。公開版の YT LOOPER の「設定」→「取り込む」で選ぶと、Mac がなくても分けた音で聴けます。";
+    }
   }
-  ui.exportBtn?.addEventListener("click", () => toast("ファイルを作っています。数秒で保存が始まります"));
+  ui.exportBtn?.addEventListener("click", (e) => {
+    if (!LOCAL_OK) { toast("ファイルを作っています。数秒で保存が始まります"); return; }
+    e.preventDefault();
+    if (!S.saving) saveToDevice(S.mix.id);
+  });
+
+  async function saveToDevice(id) {
+    S.saving = true;
+    ui.exportBtn.textContent = "保存中…";
+    ui.exportNote.textContent = "ファイルを作っています…";
+    try {
+      const r = await fetch(`${SERVER}/api/export?id=${encodeURIComponent(id)}`, { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const total = +r.headers.get("Content-Length") || 0;
+      const reader = r.body.getReader();
+      const parts = [];
+      let got = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parts.push(value);
+        got += value.length;
+        if (total) ui.exportNote.textContent = `受け取っています… ${Math.floor((got / total) * 100)}%`;
+      }
+      ui.exportNote.textContent = "この端末に書き込んでいます…";
+      const blob = new Blob(parts);
+      const top = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+      const hlen = new DataView(top.buffer).getUint32(8, true);
+      const h = JSON.parse(new TextDecoder().decode(await blob.slice(12, 12 + hlen).arrayBuffer()));
+      await Local.put({ id: h.id, title: h.title, dur: h.frames / h.sr, size: blob.size, added: Date.now(), head: h, base: 12 + hlen, blob });
+      navigator.storage?.persist?.().catch(() => {});
+      renderLocalList(await Local.all());
+      toast("この端末に保存しました。Mac がなくても聴けます");
+      S.saving = false;
+      if (S.mix?.id === id) S.mix.saved = true;
+      renderExport();
+    } catch (err) {
+      S.saving = false;
+      const full = /quota/i.test(err?.name || "") || /quota/i.test(String(err));
+      toast(full ? "iPhone の空き容量が足りません" : "保存できませんでした");
+      renderExport();
+    }
+  }
 
   // ---------- 入口 ----------
   function onVideo(id) {
     S.videoId = id;
     if (!S.available) return;
     if (S.loadedId && S.loadedId !== id) unloadAudio();
-    if (S.mode === "local") loadLocal(id);
-    else checkVideo(id);
+    route(id);
   }
 
   async function init() {
-    if (S.mode === "local") return initLocal();
-    try {
-      await api("/api/hello", { timeout: 1500 });
-    } catch {
-      return; // 分離サーバーがなければ何も出さない
-    }
-    diag("init", { ua: navigator.userAgent, audioSession: !!navigator.audioSession });
-    $("localGoPublic").hidden = false;
-    activate();
+    const hasSongs = LOCAL_OK ? await initLocal() : false;
+    if (LOCAL_OK) renderMac();
+    const ok = await hello();
+    if (ok) diag("init", { ua: navigator.userAgent, audioSession: !!navigator.audioSession, https: LOCAL_OK });
+    if (ok || hasSongs) activate();
   }
+
+  // Mac の分離サーバーにつながるか確かめる
+  async function hello() {
+    S.server = false;
+    if (!SERVER) return false;
+    try {
+      await api("/api/hello", { timeout: LOCAL_OK ? 4000 : 1500 });
+      S.server = true;
+    } catch { /* つながらない */ }
+    if (LOCAL_OK) renderMac();
+    return S.server;
+  }
+
+  // 公開版の設定：Mac のアドレス（Tailscale）
+  function renderMac() {
+    if (document.activeElement !== ui.macAddr) ui.macAddr.value = SERVER ? SERVER.replace(/^https:\/\//, "") : "";
+    ui.macState.textContent = !SERVER ? "入れると、Mac で分けた曲をこのアプリから直接聴いたり保存したりできます。"
+      : S.server ? "Mac につながっています。"
+      : "Mac につながりません。Mac の YT LOOPER と、この端末の Tailscale がオンか確かめてください（保存した曲はそのまま聴けます）。";
+    ui.macState.dataset.ok = S.server ? "1" : "";
+  }
+  ui.macAddr?.addEventListener("change", async () => {
+    SERVER = normMac(ui.macAddr.value);
+    try { SERVER ? localStorage.setItem(MAC_KEY, SERVER) : localStorage.removeItem(MAC_KEY); } catch { /* 保存できなくても今回は使える */ }
+    ui.macState.textContent = "確かめています…";
+    const ok = await hello();
+    toast(ok ? "Mac につながりました" : "Mac につながりませんでした");
+    if (ok && !S.available) activate();
+    else if (S.available && S.videoId && !S.mix?.local) { if (S.loadedId) unloadAudio(); route(S.videoId); }
+  });
 
   // STEMS を出す
   function activate() {
