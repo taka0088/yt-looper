@@ -20,7 +20,10 @@ window.Stems = (() => {
   // 鳴らし方：6パートを1本にまとめた生の音（mix.pcm）を少しずつ取り、全パートを Web Audio の同じ時計で
   // 同じ瞬間に鳴らす。パートごとに <audio> で鳴らすと、iPhone では鳴り出しの遅れがパートごとに違い、
   // パートどうしがずれてバラバラに聞こえるため
-  const CHUNK = 2;          // 秒。まとめた音をこの長さずつ取りに行く（2秒＝約 2MB）
+  const CHUNK = 2;          // 曲の秒。まとめた音をこの長さずつ取りに行く（2秒＝約 2MB）
+  // 速度を変えたときは、分離サーバーが音程を保ったまま伸び縮みさせた音を作って返す。
+  // かたまりどうしは前後 XFADE ずつ重ね、フェードしてつなぐ（サーバーの CHUNK / XFADE と同じ値）
+  const XFADE = 0.01;
   const AHEAD = 8;          // 再生位置からこの秒数先まで取っておく
   const KEEP = 24;          // 手元に置くかたまりの数（超えたら遠いものから捨てる）
   const HORIZON = 0.5;      // この秒数先まで鳴らす予約を入れておく
@@ -54,15 +57,14 @@ window.Stems = (() => {
     owning: false,     // いま分けた音で鳴らしているか（YouTube 側は無音）
     ctx: null,
     ch: PARTS.map((p) => ({ ...p, pos: UNITY, mute: false, solo: false, level: 0 })),
-    mix: null,         // { id, url, sr, frames, dur, channels, index[] } いま鳴らす曲のまとめた音
+    mix: null,         // { id, url, sr, frames, dur, channels, index[], rate } いま鳴らす曲のまとめた音
     chunks: new Map(), // かたまりの番号 → { bufs: AudioBuffer[6] | null, used }
     queue: [],         // 取りに行く順番
     loading: 0,
-    gen: null,         // いまの鳴らし方 { at, media, next, bus[], nodes[] }。合わせ直すたびに作り直す
+    gen: null,         // いまの鳴らし方 { at, media, rate, next, bus[], nodes[] }。合わせ直すたびに作り直す
     clock: null,
     offset: 0,         // Sync：耳で合わせたずらし（秒、+ で音が早く出る）。端末ごとに保存
     pollTimer: null,
-    rateToast: false,
     stat: { reanchors: 0, d: null, mean: null, lastWhy: "" },
   };
 
@@ -283,6 +285,7 @@ window.Stems = (() => {
       S.mix = {
         id, url: `/stems/${id}/mix.pcm`, sr: m.sr, frames: m.frames, dur: m.frames / m.sr, channels: m.channels,
         index: S.ch.map((c) => m.parts.indexOf(c.id)),
+        rate: 1,
       };
       S.loaded = true;
       diag("loaded", { id, dur: +S.mix.dur.toFixed(1) });
@@ -309,6 +312,8 @@ window.Stems = (() => {
 
   // ---------- まとめた音を少しずつ取る ----------
   const chunkOf = (t) => Math.floor(Math.max(0, t) / CHUNK);
+  // かたまり i が始まる曲の位置（速度を変えた音は前のかたまりと XFADE だけ重なる）
+  const chunkStart = (i, rate) => (rate === 1 ? i * CHUNK : Math.max(0, i * CHUNK - XFADE));
 
   function need(i, urgent = false) {
     const m = S.mix;
@@ -329,11 +334,14 @@ window.Stems = (() => {
       const f0 = Math.round(i * CHUNK * m.sr);
       const f1 = Math.min(m.frames, Math.round((i + 1) * CHUNK * m.sr));
       const bpf = m.channels * 2;
+      const rate = m.rate;
       S.loading++;
-      fetch(m.url, { headers: { Range: `bytes=${f0 * bpf}-${f1 * bpf - 1}` }, cache: "no-store" })
+      (rate === 1
+        ? fetch(m.url, { headers: { Range: `bytes=${f0 * bpf}-${f1 * bpf - 1}` }, cache: "no-store" })
+        : fetch(`${SERVER}/api/pcm?id=${m.id}&rate=${rate}&i=${i}`, { cache: "no-store" }))
         .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.arrayBuffer(); })
         .then((ab) => {
-          if (S.mix !== m || S.chunks.get(i) !== k) return;
+          if (S.mix !== m || S.chunks.get(i) !== k || m.rate !== rate) return;
           k.bufs = toBuffers(m, ab);
           schedule();
         })
@@ -365,6 +373,12 @@ window.Stems = (() => {
   // 再生位置の先と、A–B ループの戻り先を取っておく。遠いものは捨てる
   function prefetch() {
     if (!S.mix || !state.player?.getCurrentTime) return;
+    if (S.mix.rate !== state.rate) {
+      // 速度が変わった：その速度の音を取り直す
+      S.mix.rate = state.rate;
+      S.chunks.clear();
+      S.queue = [];
+    }
     const t = S.gen ? heardMedia() : ytNow();
     const cur = chunkOf(t);
     need(cur, true);
@@ -395,7 +409,7 @@ window.Stems = (() => {
   // いま聞こえている曲の位置
   function heardMedia() {
     const g = S.gen;
-    return g.media + (heardCtx() - g.at);
+    return g.media + (heardCtx() - g.at) * g.rate;
   }
   // YouTube の getCurrentTime は飛び飛びに変わる（iPhone は特に粗い）ので、値が変わった瞬間を基準に経過時間で補う
   function ytNow() {
@@ -412,8 +426,9 @@ window.Stems = (() => {
     if (ctx.state === "suspended") ctx.resume();
     const now = ctx.currentTime;
     const at = now + START_LEAD;
-    // at に予約した音が聞こえるのは、映像がさらに (at − いま聞こえている時刻) 進んだとき
-    const media = t + S.offset + (at - heardCtx());
+    // at に予約した音が聞こえるのは、映像がさらに (at − いま聞こえている時刻) × 速度 進んだとき
+    const rate = S.mix.rate;
+    const media = t + (S.offset + (at - heardCtx())) * rate;
     endGen(at);
     const bus = S.ch.map((c) => {
       const g = ctx.createGain();
@@ -423,7 +438,7 @@ window.Stems = (() => {
       g.connect(c.gain);
       return g;
     });
-    S.gen = { at, media, next: chunkOf(media), bus, nodes: [] };
+    S.gen = { at, media, rate, next: chunkOf(media), bus, nodes: [] };
     S.stat.reanchors++;
     S.stat.lastWhy = why;
     S.settleUntil = performance.now() + SETTLE_MS;
@@ -459,9 +474,8 @@ window.Stems = (() => {
     g.nodes = g.nodes.filter((x) => x.end > now);
     for (;;) {
       const i = g.next;
-      const start = i * CHUNK;
-      if (start >= m.dur) break;
-      const when = g.at + (start - g.media);
+      if (i * CHUNK >= m.dur) break;
+      const when = g.at + (chunkStart(i, g.rate) - g.media) / g.rate;
       if (when > now + HORIZON) break;
       const k = S.chunks.get(i);
       if (!k?.bufs) { need(i, true); break; } // まだ届いていない。届いたらそこから鳴らす
@@ -486,16 +500,9 @@ window.Stems = (() => {
   function owns() { return S.owning; }
 
   function updateOwnership() {
-    // 処理系が動き出す（最初に画面に触れる）までは YouTube の音のまま鳴らす。
-    // 速度を変えている間も YouTube の音（分けた音は速度を変えると音程まで変わってしまう）
-    const ready = S.available && S.on && S.loaded && S.ctx?.state === "running"
+    // 処理系が動き出す（最初に画面に触れる）までは YouTube の音のまま鳴らす
+    const want = S.available && S.on && S.loaded && S.ctx?.state === "running"
       && S.loadedId === state.videoId && !!state.player?.mute;
-    const want = ready && state.rate === 1;
-    if (ready && !want && !S.rateToast) {
-      S.rateToast = true;
-      toast("速度を変えている間は元の音で鳴ります");
-    }
-    if (want) S.rateToast = false;
     if (want === S.owning) return;
     S.owning = want;
     if (want) {
@@ -522,7 +529,11 @@ window.Stems = (() => {
       if (!want) {
         if (S.gen) stopGen();
       } else if (!S.gen) {
+        prefetch();
         begin(ytNow(), "start");
+      } else if (S.gen.rate !== state.rate) {
+        prefetch();                       // 速度が変わった：新しい速度の音に乗り換える
+        begin(ytNow(), "rate");
       } else {
         follow();
       }
@@ -535,7 +546,7 @@ window.Stems = (() => {
   function follow() {
     const now = performance.now();
     if (now < S.settleUntil) return;
-    const d = heardMedia() - (ytNow() + S.offset);
+    const d = (heardMedia() - ytNow()) / S.gen.rate - S.offset; // 聞こえる音のズレ（実時間の秒）
     S.stat.d = d;
     if (Math.abs(d) > HARD) { begin(ytNow(), "hard " + Math.round(d * 1000)); return; }
     if (!S.win) S.win = { start: now, sum: 0, n: 0 };
