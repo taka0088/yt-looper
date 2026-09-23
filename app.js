@@ -1336,3 +1336,9 @@ if ("serviceWorker" in navigator) {
 if ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true) {
   document.documentElement.classList.add("standalone");
 }
+
+// Mac 版（http）と公開版（https）は build 番号が同じなので、どちらを開いているか添える
+{
+  const b = document.querySelector(".build");
+  if (b) b.textContent += location.protocol === "https:" ? "・公開版" : "・Mac 版";
+}
