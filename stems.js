@@ -1194,6 +1194,13 @@ window.Stems = (() => {
       S.server = true;
     } catch (err) {
       S.macErr = err?.name === "AbortError" ? "時間切れ" : String(err?.message || err); // 一時的：原因調べ
+      // 一時的：どの形の呼びかけなら Mac に届くかを試す（Mac の記録で見る）
+      if (LOCAL_OK) {
+        fetch(SERVER + "/api/hello?probe=nocors", { mode: "no-cors" }).then(() => { S.macErr += "・n〇"; renderMac(); }, () => { S.macErr += "・n×"; renderMac(); });
+        const img = new Image();
+        img.onload = img.onerror = () => { S.macErr += "・i済"; renderMac(); };
+        img.src = SERVER + "/api/hello?probe=img&t=" + Date.now();
+      }
     }
     if (LOCAL_OK) renderMac();
     return S.server;
