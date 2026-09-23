@@ -565,6 +565,7 @@ function loadVideo(id, start = 0) {
   renderMarkers();
   renderSaved();
   renderRecent();
+  window.Stems?.onVideo(id);
 }
 
 function onPlayerReady() {
@@ -700,6 +701,7 @@ function seek(t) {
   } else {
     state.player.seekTo(t, true);
   }
+  window.Stems?.seek(t);
   renderHead(t);
 }
 
@@ -742,7 +744,8 @@ function finishPreroll() {
   const { target } = preroll;
   preroll = null;
   state.player.seekTo(target, true);
-  state.player.unMute();
+  window.Stems?.seek(target);
+  restoreVideoSound();
   el.shield.classList.remove("cover", "cued", "error");
   el.shield.style.backgroundImage = "";
   el.shieldMsg.innerHTML = "";
@@ -751,7 +754,11 @@ function finishPreroll() {
 function cancelPreroll() {
   if (!preroll) return;
   preroll = null;
-  state.player.unMute();
+  restoreVideoSound();
+}
+// 分けた音で鳴らしている間は、YouTube 側の音は消したままにする
+function restoreVideoSound() {
+  if (!window.Stems?.owns()) state.player.unMute();
 }
 function pause() {
   if (!state.ready) return;
@@ -825,6 +832,7 @@ function tick() {
       seek(state.a);
     }
   }
+  window.Stems?.sync();
   requestAnimationFrame(tick);
 }
 requestAnimationFrame(tick);

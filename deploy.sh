@@ -4,7 +4,7 @@
 set -e
 cd "$(dirname "$0")"
 BUILD=$(date +%Y%m%d-%H%M)
-sed -i '' -E "s/(style\.css\?v=)[0-9A-Za-z-]+/\1$BUILD/; s/(app\.js\?v=)[0-9A-Za-z-]+/\1$BUILD/; s/build [0-9A-Za-z-]+</build $BUILD</" index.html
+sed -i '' -E "s/(style\.css\?v=)[0-9A-Za-z-]+/\1$BUILD/; s/(app\.js\?v=)[0-9A-Za-z-]+/\1$BUILD/; s/(stems\.js\?v=)[0-9A-Za-z-]+/\1$BUILD/; s/build [0-9A-Za-z-]+</build $BUILD</" index.html
 git add -A
 git commit -q -m "${1:-更新} (build $BUILD)
 

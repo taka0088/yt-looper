@@ -227,6 +227,24 @@
 
     </section>
 
+    <!-- STEMS：Mac の http 版で分離サーバーが見つかったときだけ出る。広い画面は縦フェーダー、狭い画面は1パート1行 -->
+    <section class="stems-dock" id="stemsDock" hidden>
+      <article class="module stems">
+        <header class="module-head">
+          <h2>Stems</h2>
+          <div class="stems-tools">
+            <button type="button" class="metal-btn" id="stemsAllOn" title="消音と単独を全部解除">Clear M/S</button>
+            <button type="button" class="metal-btn" id="stemsFlat" title="音量を全部 0 dB に戻す">0 dB</button>
+            <button type="button" class="metal-btn stems-power" id="stemsPower" aria-pressed="true" title="元の音に戻す">
+              <span class="led green" id="stemsLed"></span><span>On</span>
+            </button>
+          </div>
+        </header>
+        <div class="stems-status" id="stemsStatus"></div>
+        <div class="stems-mixer" id="stemsMixer" hidden></div>
+      </article>
+    </section>
+
 
     <!-- SPEED：Mac では左列のラックにそのまま並ぶ。スマホでは LOOPER の SPEED ボタンで引き出したように出てくる -->
     <div class="speed-pop" id="speedPop" hidden>
@@ -262,5 +280,6 @@
 
   <script src="https://www.youtube.com/iframe_api"></script>
   <script src="app.js?v=20260921-2003"></script>
+  <script src="stems.js?v=20260921-2003"></script>
 </body>
 </html>
