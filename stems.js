@@ -207,11 +207,14 @@ window.Stems = (() => {
     applyGains();
   }
 
-  // iPhone は「指で触れた瞬間」にしか音を出し始められない。最初に触れたときに一度鳴らして止めておくと、
-  // あとから映像に合わせて自動で鳴らせるようになる
-  function unlock() {
+  // iPhone は「ユーザーの操作の中」でしか音を出し始められない。操作のたびに一度鳴らして止めておくと、
+  // あとから映像に合わせて自動で鳴らせるようになる。
+  // 指の操作は「離した瞬間」（pointerup / touchend）しか操作と認められない。触れた瞬間（pointerdown）は
+  // マウスのときだけ認められるので、指の pointerdown では何もしない（ここで失敗すると次の機会を逃す）
+  function unlock(e) {
     if (!S.ctx) return;
-    if (S.ctx.state === "suspended") S.ctx.resume();
+    if (e.type === "pointerdown" && e.pointerType !== "mouse") return;
+    if (S.ctx.state !== "running") S.ctx.resume();
     for (const c of S.ch) {
       const a = c.audio;
       if (c.unlocked || !a.src) continue;
@@ -221,8 +224,9 @@ window.Stems = (() => {
         .catch(() => { c.unlocked = false; a.muted = false; });
     }
   }
-  document.addEventListener("pointerdown", unlock, true);
-  document.addEventListener("keydown", unlock, true);
+  for (const type of ["pointerdown", "pointerup", "touchend", "keydown"]) {
+    document.addEventListener(type, unlock, true);
+  }
 
   function loadAudio(id) {
     ensureGraph();
