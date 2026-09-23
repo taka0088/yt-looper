@@ -1632,6 +1632,33 @@ html:has(.app[data-fs="1"]) { overflow: hidden; }
   .stems-tools .metal-btn { padding: 0 8px; font-size: 11px; }
 }
 
+/* ---- Sync：音のタイミングを耳で合わせる帯（パートの下） ---- */
+.stems-sync {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 10px;
+  padding: 6px 10px;
+  background: rgba(0,0,0,.34);
+  border: 1px solid rgba(0,0,0,.6);
+  border-radius: 6px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.07);
+}
+.stems-sync-label {
+  font-family: var(--font-cond); font-weight: 700; font-size: 12px;
+  letter-spacing: .12em; text-transform: uppercase; opacity: .92;
+  margin-right: 4px;
+}
+.stems-sync .metal-btn {
+  height: 26px; padding: 0 10px;
+  font-size: 12px; font-weight: 700;
+  border-radius: 4px;
+  touch-action: manipulation;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+.stems-sync-lcd { min-width: 66px; text-align: right; }
+.stems-sync-lcd b { font-family: var(--font); font-weight: 600; font-size: .85em; margin-right: 1px; }
+.stems-sync-lcd::after { content: "ms"; font-family: var(--font); font-size: .75em; margin-left: 3px; opacity: .8; text-shadow: none; }
+.stems-sync-reset { margin-left: auto; }
+
 /* ---- Mac 中くらいの幅：左列にリストで収める ---- */
 @media (min-width: 900px) and (max-width: 1279px) {
   .app[data-stems="1"]:not([data-theater="1"]) {
@@ -1653,6 +1680,9 @@ html:has(.app[data-fs="1"]) { overflow: hidden; }
   .app[data-stems="1"] .stem-fader { height: 24px; }
   .app[data-stems="1"] .stem-fader .cap { height: 22px; width: 13px; }
   .app[data-stems="1"] .stem-db { display: none; }
+  .app[data-stems="1"] .stems-sync { margin-top: 6px; padding: 3px 7px; gap: 6px; }
+  .app[data-stems="1"] .stems-sync .metal-btn { height: 22px; padding: 0 7px; font-size: 11px; }
+  .app[data-stems="1"] .stems-sync-label { font-size: 11px; letter-spacing: .06em; }
 
   /* 左列が足りないので、SPEED は iPhone と同じく LOOPER の Speed ボタンで引き出す */
   .app[data-stems="1"]:not([data-theater="1"]) .speed-btn { display: inline-flex; }

@@ -242,6 +242,14 @@
         </header>
         <div class="stems-status" id="stemsStatus"></div>
         <div class="stems-mixer" id="stemsMixer" hidden></div>
+        <!-- Sync：分けた音が映像より遅れて（早く）聞こえるときに耳で合わせる。端末ごとに保存 -->
+        <div class="stems-sync" id="stemsSync">
+          <span class="stems-sync-label">Sync</span>
+          <button type="button" class="metal-btn" id="syncEarlier" title="音が映像より遅れて聞こえるときに押す（押し続けると続けて動く）">早く</button>
+          <span class="lcd small stems-sync-lcd" id="syncLcd">0</span>
+          <button type="button" class="metal-btn" id="syncLater" title="音が映像より先に聞こえるときに押す（押し続けると続けて動く）">遅く</button>
+          <button type="button" class="metal-btn stems-sync-reset" id="syncReset" title="ずらしをやめる">0 に戻す</button>
+        </div>
       </article>
     </section>
 

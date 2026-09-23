@@ -16,21 +16,31 @@ window.Stems = (() => {
   ];
   const STORE_KEY = "ytlooper:stems";
   const UNITY = 0.75;    // フェーダーのこの位置が 0 dB（一番上は約 +5 dB）
-  // 飛ばして合わせると、iPhone では鳴り出すまでしばらく無音になり、しかも currentTime が粗くズレを大きく見せる。
-  // 再生速度はズレ直しに使わない（iPhone では速度を変え続けると Web Audio への音が止まる）。
-  // 一度合わせればズレはほとんど増えない（実測 1分で 5ms）ので、平均のズレが大きいときだけ飛ばして合わせる
-  const TOL = 0.08;        // 平均でこれ以上ずれていたら合わせ直す
-  const HARD = 1.0;        // これ以上ずれたら平均を待たずに合わせ直す
-  const WINDOW_MS = 1500;  // ズレはこの時間の平均で判断する（iPhone の currentTime は粗い）
-  const MIN_GAP_MS = 3000; // 合わせ直しはこの間隔より詰めない
-  const SPREAD = 0.5;      // パート同士がこれ以上離れたら揃え直す
-  const SETTLE_MS = 800;   // 飛ばしたあと、鳴り出すまでズレの判定を休む時間
+
+  // 鳴らし方：6パートを1本にまとめた生の音（mix.pcm）を少しずつ取り、全パートを Web Audio の同じ時計で
+  // 同じ瞬間に鳴らす。パートごとに <audio> で鳴らすと、iPhone では鳴り出しの遅れがパートごとに違い、
+  // パートどうしがずれてバラバラに聞こえるため
+  const CHUNK = 2;          // 秒。まとめた音をこの長さずつ取りに行く（2秒＝約 2MB）
+  const AHEAD = 8;          // 再生位置からこの秒数先まで取っておく
+  const KEEP = 24;          // 手元に置くかたまりの数（超えたら遠いものから捨てる）
+  const HORIZON = 0.5;      // この秒数先まで鳴らす予約を入れておく
+  const START_LEAD = 0.05;  // 鳴らし始め・合わせ直しはこの秒数先から（予約が間に合うように）
+  const FADE = 0.008;       // 合わせ直しのつなぎ目を短く重ねてプツッという音を消す
+  // 映像とのズレ：一定時間の平均で判断し、大きいときだけ合わせ直す（合わせ直しはほぼ聞こえない）
+  const TOL = 0.035;
+  const HARD = 0.25;        // これ以上ずれたら平均を待たずに合わせ直す
+  const WINDOW_MS = 1000;
+  const MIN_GAP_MS = 1500;
+  const SETTLE_MS = 300;    // 合わせ直した直後はズレの判定を休む
+  const OFFSET_STEP = 0.01; // Sync の「早く」「遅く」1回ぶん
+  const OFFSET_MAX = 0.5;
 
   const $ = (id) => document.getElementById(id);
   const ui = {
     app: document.querySelector(".app"),
     dock: $("stemsDock"), status: $("stemsStatus"), mixer: $("stemsMixer"),
     power: $("stemsPower"), led: $("stemsLed"), clear: $("stemsAllOn"), flat: $("stemsFlat"),
+    sync: $("stemsSync"), syncLcd: $("syncLcd"), earlier: $("syncEarlier"), later: $("syncLater"), syncReset: $("syncReset"),
   };
 
   const S = {
@@ -42,13 +52,18 @@ window.Stems = (() => {
     loaded: false,
     on: true,          // On スイッチ：分けた音で鳴らすか
     owning: false,     // いま分けた音で鳴らしているか（YouTube 側は無音）
-    playing: false,
     ctx: null,
     ch: PARTS.map((p) => ({ ...p, pos: UNITY, mute: false, solo: false, level: 0 })),
+    mix: null,         // { id, url, sr, frames, dur, channels, index[] } いま鳴らす曲のまとめた音
+    chunks: new Map(), // かたまりの番号 → { bufs: AudioBuffer[6] | null, used }
+    queue: [],         // 取りに行く順番
+    loading: 0,
+    gen: null,         // いまの鳴らし方 { at, media, next, bus[], nodes[] }。合わせ直すたびに作り直す
     clock: null,
-    drift: 0,
-    seekLead: 0,       // 飛ばすときに先へ飛ばす秒数（平均のズレから学習し、端末ごとに保存）
+    offset: 0,         // Sync：耳で合わせたずらし（秒、+ で音が早く出る）。端末ごとに保存
     pollTimer: null,
+    rateToast: false,
+    stat: { reanchors: 0, d: null, mean: null, lastWhy: "" },
   };
 
   // ---------- 一時的な診断：iPhone の中の状態を Mac の分離サーバーの記録に送る ----------
@@ -58,35 +73,22 @@ window.Stems = (() => {
     fetch(SERVER + "/api/diag", { method: "POST", body, keepalive: true }).catch(() => {});
   }
   function snapshot() {
-    const p = state.player;
+    const c = S.ctx;
+    const ts = c?.getOutputTimestamp?.();
     return {
-      ctx: S.ctx?.state, owning: S.owning, playing: S.playing, loaded: S.loaded, on: S.on,
-      yt: p?.getPlayerState?.(), ytMuted: p?.isMuted?.(), ytT: +(p?.getCurrentTime?.() || 0).toFixed(2),
-      vis: document.visibilityState,
-      a: S.ch.map((c) => {
-        const a = c.audio;
-        if (!a) return "-";
-        return `${a.paused ? "P" : ">"}${a.readyState}/${a.currentTime.toFixed(1)}${a.muted ? "/m" : ""}${a.error ? "/E" + a.error.code : ""}`;
-      }),
-      lv: S.ch.map((c) => c.level.toFixed(2)),
-      gain: S.ch.map((c) => (c.gain ? c.gain.gain.value.toFixed(2) : "-")),
-      mix: S.ch.map((c) => `${c.pos.toFixed(2)}${c.mute ? "M" : ""}${c.solo ? "S" : ""}`),
-      raw: S.ch.map((c) => {
-        if (!c.analyser) return "-";
-        c.analyser.getFloatTimeDomainData(c.buf);
-        let p = 0;
-        for (const v of c.buf) p = Math.max(p, Math.abs(v));
-        return p.toFixed(3);
-      }),
-      raf: rafCount,
-      seeks: S.seeks || 0,
-      lead: +S.seekLead.toFixed(2),
-      d: S.playing ? +((S.ch[0].audio.currentTime - state.player.getCurrentTime()) * 1000).toFixed(0) : null,
+      ctx: c?.state, sr: c?.sampleRate, owning: S.owning, gen: !!S.gen, on: S.on, rate: state.rate,
+      yt: state.player?.getPlayerState?.(), ytT: +(state.player?.getCurrentTime?.() || 0).toFixed(2),
+      base: c?.baseLatency, out: c?.outputLatency,
+      ts: ts ? { c: +ts.contextTime.toFixed(3), p: Math.round(ts.performanceTime) } : null,
+      lat: c ? +(c.currentTime - heardCtx()).toFixed(3) : null,
+      d: S.stat.d == null ? null : Math.round(S.stat.d * 1000),
+      mean: S.stat.mean == null ? null : Math.round(S.stat.mean * 1000),
+      re: S.stat.reanchors, why: S.stat.lastWhy,
+      chunks: [...S.chunks.values()].filter((k) => k.bufs).length, q: S.queue.length, loading: S.loading,
+      off: Math.round(S.offset * 1000),
+      lv: S.ch.map((k) => k.level.toFixed(2)),
     };
   }
-  let rafCount = 0;
-  const countFrames = () => { rafCount++; requestAnimationFrame(countFrames); };
-  requestAnimationFrame(countFrames);
   setInterval(() => { if (S.available && S.loadedId) diag("snap", snapshot()); }, 3000);
 
   // ---------- 設定の保存 ----------
@@ -94,7 +96,7 @@ window.Stems = (() => {
     try {
       const p = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
       if (typeof p.on === "boolean") S.on = p.on;
-      if (Number.isFinite(p.seekLead)) S.seekLead = clamp(p.seekLead, 0, 1.5);
+      if (Number.isFinite(p.offset)) S.offset = clamp(p.offset, -OFFSET_MAX, OFFSET_MAX);
       for (const c of S.ch) {
         const q = p.parts?.[c.id];
         if (!q) continue;
@@ -106,7 +108,7 @@ window.Stems = (() => {
   function savePrefs() {
     const parts = {};
     for (const c of S.ch) parts[c.id] = { pos: c.pos, mute: c.mute, solo: c.solo };
-    try { localStorage.setItem(STORE_KEY, JSON.stringify({ on: S.on, parts, seekLead: S.seekLead })); } catch { /* 同上 */ }
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ on: S.on, parts, offset: S.offset })); } catch { /* 同上 */ }
   }
 
   // ---------- 音量の換算 ----------
@@ -227,9 +229,7 @@ window.Stems = (() => {
   }
 
   // ---------- 音の配線 ----------
-  // 音量・メーターの処理系（Web Audio）。
-  // 必ず「Web Audio につないでから src を入れる」。音を読み込んだあとでつなぐと、Chrome では無音になる。
-  // 処理系はここ（操作の外）で作ってよく、画面に触れた操作の中で resume するだけでよい（iPhone で確認済み）
+  // パートごとに 音量（gain）→ スピーカー、と メーター（analyser）。鳴らす音はその手前に毎回つなぐ
   function ensureGraph() {
     if (S.ctx) return;
     // iPhone のマナーモードでも鳴るよう「再生用の音」として扱わせる（Safari 16.4 以降）
@@ -237,162 +237,271 @@ window.Stems = (() => {
     const AC = window.AudioContext || window.webkitAudioContext;
     S.ctx = new AC();
     S.ctx.onstatechange = () => diag("ctx", { state: S.ctx.state });
-    diag("graph", { ctx: S.ctx.state, audioSession: navigator.audioSession?.type || null });
+    diag("graph", { ctx: S.ctx.state, sr: S.ctx.sampleRate, base: S.ctx.baseLatency, out: S.ctx.outputLatency });
     for (const c of S.ch) {
-      const a = new Audio();
-      a.preload = "auto";
-      a.preservesPitch = true;
-      a.webkitPreservesPitch = true;
-      a.playsInline = true;
-      const src = S.ctx.createMediaElementSource(a);
       c.gain = S.ctx.createGain();
       c.analyser = S.ctx.createAnalyser();
       c.analyser.fftSize = 512;
       c.buf = new Float32Array(c.analyser.fftSize);
-      src.connect(c.gain);
       c.gain.connect(S.ctx.destination);
       c.gain.connect(c.analyser);
-      c.audio = a;
     }
     applyGains();
   }
 
-  // iPhone は「ユーザーの操作の中」でしか音を出し始められない。操作のたびに一度鳴らして止めておくと、
-  // あとから映像に合わせて自動で鳴らせるようになる。
-  // 指の操作は「離した瞬間」（pointerup / touchend）しか操作と認められない。触れた瞬間（pointerdown）は
-  // マウスのときだけ認められるので、指の pointerdown では何もしない（ここで失敗すると次の機会を逃す）
+  // iPhone は「ユーザーの操作の中」でしか音を出し始められない。画面に触れるたびに処理系を起こしておく。
+  // 指の操作は「離した瞬間」（pointerup / touchend）しか操作と認められない（指の pointerdown では何もしない）
   function unlock(e) {
     if (e.type === "pointerdown" && e.pointerType !== "mouse") return;
     if (!S.ctx) return;
-    const pending = S.ch.filter((c) => !c.unlocked && c.audio.src).length;
-    if (S.ctx.state !== "running" || pending) diag("unlock", { type: e.type, pt: e.pointerType, ctx: S.ctx.state, pending });
-    if (S.ctx.state !== "running") S.ctx.resume().catch((err) => diag("resume-ng", { err: `${err.name}: ${err.message}` }));
-    for (const c of S.ch) {
-      const a = c.audio;
-      if (c.unlocked || !a.src) continue;
-      c.unlocked = true;
-      a.muted = true;
-      a.play().then(() => { if (!S.playing) a.pause(); a.muted = false; diag("unlock-ok", { part: c.id }); })
-        .catch((err) => { c.unlocked = false; a.muted = false; diag("unlock-ng", { part: c.id, err: `${err.name}: ${err.message}` }); });
+    if (S.ctx.state !== "running") {
+      S.ctx.resume().catch((err) => diag("resume-ng", { err: `${err.name}: ${err.message}` }));
+    }
+    if (!S.primed) {
+      // 1サンプルの無音を鳴らす（古い iOS はこれで初めて音が出せるようになる）
+      S.primed = true;
+      const n = S.ctx.createBufferSource();
+      n.buffer = S.ctx.createBuffer(1, 1, 22050);
+      n.connect(S.ctx.destination);
+      n.start();
     }
   }
   for (const type of ["pointerdown", "pointerup", "touchend", "keydown"]) {
     document.addEventListener(type, unlock, true);
   }
 
-  function loadAudio(id) {
+  async function loadAudio(id) {
     ensureGraph();
-    S.loaded = false;
+    unloadAudio();
     S.loadedId = id;
-    pauseAll();
-    const ready = S.ch.map((c) => new Promise((resolve, reject) => {
-      const a = c.audio;
-      const ok = () => { off(); resolve(); };
-      const ng = () => { off(); reject(new Error(c.name)); };
-      const off = () => { a.removeEventListener("canplay", ok); a.removeEventListener("error", ng); };
-      a.addEventListener("canplay", ok);
-      a.addEventListener("error", ng);
-      c.unlocked = false;
-      // ページと同じサーバー（serve.py）から読む。別のポートから読むと iPhone では Web Audio で無音になる
-      a.src = `/stems/${id}/${c.id}.m4a`;
-      a.load();
-    }));
     renderStatus();
-    Promise.all(ready).then(() => {
+    try {
+      const r = await fetch(`/stems/${id}/mix.json`, { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const m = await r.json();
       if (S.loadedId !== id) return;
+      S.mix = {
+        id, url: `/stems/${id}/mix.pcm`, sr: m.sr, frames: m.frames, dur: m.frames / m.sr, channels: m.channels,
+        index: S.ch.map((c) => m.parts.indexOf(c.id)),
+      };
       S.loaded = true;
-      diag("loaded", { id });
+      diag("loaded", { id, dur: +S.mix.dur.toFixed(1) });
+      prefetch();
       updateOwnership();
       renderStatus();
-    }).catch((err) => {
+    } catch (err) {
       if (S.loadedId !== id) return;
-      diag("load-ng", { id, err: err.message });
-      setPhase("error", { error: `${err.message} の音を読み込めませんでした` });
-    });
+      diag("load-ng", { id, err: String(err) });
+      setPhase("error", { error: "分けた音を読み込めませんでした" });
+    }
   }
 
   function unloadAudio() {
-    pauseAll();
+    stopGen();
     S.loaded = false;
     S.loadedId = null;
-    for (const c of S.ch) {
-      if (!c.audio) continue;
-      c.audio.removeAttribute("src");
-      c.audio.load();
-      c.level = 0;
-    }
+    S.mix = null;
+    S.chunks.clear();
+    S.queue = [];
+    for (const c of S.ch) c.level = 0;
     updateOwnership(); // 次の画面更新を待たずに YouTube の音へ戻す
   }
 
-  // ---------- 映像に合わせる ----------
-  // getCurrentTime は飛び飛びに変わるので、値が変わった瞬間を基準に経過時間で補う
+  // ---------- まとめた音を少しずつ取る ----------
+  const chunkOf = (t) => Math.floor(Math.max(0, t) / CHUNK);
+
+  function need(i, urgent = false) {
+    const m = S.mix;
+    if (!m || i < 0 || i * CHUNK >= m.dur) return;
+    const k = S.chunks.get(i);
+    if (k) { k.used = performance.now(); return; }
+    S.chunks.set(i, { bufs: null, used: performance.now() });
+    urgent ? S.queue.unshift(i) : S.queue.push(i);
+    pump();
+  }
+
+  function pump() {
+    while (S.loading < 2 && S.queue.length) {
+      const i = S.queue.shift();
+      const m = S.mix;
+      const k = S.chunks.get(i);
+      if (!m || !k || k.bufs) continue;
+      const f0 = Math.round(i * CHUNK * m.sr);
+      const f1 = Math.min(m.frames, Math.round((i + 1) * CHUNK * m.sr));
+      const bpf = m.channels * 2;
+      S.loading++;
+      fetch(m.url, { headers: { Range: `bytes=${f0 * bpf}-${f1 * bpf - 1}` }, cache: "no-store" })
+        .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.arrayBuffer(); })
+        .then((ab) => {
+          if (S.mix !== m || S.chunks.get(i) !== k) return;
+          k.bufs = toBuffers(m, ab);
+          schedule();
+        })
+        .catch((err) => {
+          if (S.chunks.get(i) === k) S.chunks.delete(i); // 次の先読みで取り直す
+          diag("chunk-ng", { i, err: String(err) });
+        })
+        .finally(() => { S.loading--; pump(); });
+    }
+  }
+
+  // 16bit・12ch（パート×ステレオ）を、パートごとのステレオの AudioBuffer に分ける
+  function toBuffers(m, ab) {
+    const d = new Int16Array(ab);
+    const n = Math.floor(d.length / m.channels);
+    return S.ch.map((c, p) => {
+      const b = S.ctx.createBuffer(2, Math.max(1, n), m.sr);
+      const L = b.getChannelData(0), R = b.getChannelData(1);
+      const src = m.index[p];
+      if (src < 0) return b;
+      for (let f = 0, j = src * 2; f < n; f++, j += m.channels) {
+        L[f] = d[j] / 32768;
+        R[f] = d[j + 1] / 32768;
+      }
+      return b;
+    });
+  }
+
+  // 再生位置の先と、A–B ループの戻り先を取っておく。遠いものは捨てる
+  function prefetch() {
+    if (!S.mix || !state.player?.getCurrentTime) return;
+    const t = S.gen ? heardMedia() : ytNow();
+    const cur = chunkOf(t);
+    need(cur, true);
+    for (let i = cur + 1; i <= cur + AHEAD / CHUNK; i++) need(i);
+    const keep = new Set();
+    for (let i = cur - 1; i <= cur + AHEAD / CHUNK; i++) keep.add(i);
+    if (state.loop && state.b > state.a) {
+      const a = chunkOf(state.a + S.offset);
+      for (let i = a; i <= a + 1; i++) { need(i); keep.add(i); }
+    }
+    if (S.chunks.size > KEEP) {
+      const old = [...S.chunks.entries()].filter(([i]) => !keep.has(i)).sort((x, y) => x[1].used - y[1].used);
+      for (const [i] of old.slice(0, S.chunks.size - KEEP)) S.chunks.delete(i);
+    }
+  }
+
+  // ---------- 時計 ----------
+  // いまスピーカーから出ている音の、処理系の時刻。予約した時刻から実際に聞こえるまでの遅れ
+  // （iPhone では大きい）を差し引いた値
+  function heardCtx() {
+    const c = S.ctx;
+    const ts = c.getOutputTimestamp?.();
+    if (ts && ts.contextTime > 0 && ts.performanceTime > 0) {
+      return ts.contextTime + (performance.now() - ts.performanceTime) / 1000;
+    }
+    return c.currentTime - (c.outputLatency || 0) - (c.baseLatency || 0);
+  }
+  // いま聞こえている曲の位置
+  function heardMedia() {
+    const g = S.gen;
+    return g.media + (heardCtx() - g.at);
+  }
+  // YouTube の getCurrentTime は飛び飛びに変わる（iPhone は特に粗い）ので、値が変わった瞬間を基準に経過時間で補う
   function ytNow() {
     const raw = state.player.getCurrentTime();
     const now = performance.now() / 1000;
     if (!S.clock || raw !== S.clock.raw) S.clock = { raw, at: now };
-    return S.clock.raw + Math.min(now - S.clock.at, 0.1) * state.rate;
+    return S.clock.raw + Math.min(now - S.clock.at, 0.5) * state.rate;
   }
-  // 分けた音の再生位置も同じように補う。iPhone の Safari は currentTime を粗い間隔でしか更新しないので、
-  // 生の値で比べると「ずれて見える → 飛ばす → 鳴る前にまた飛ばす」を繰り返し、音が一度も出なくなる
-  function audioNow() {
-    const a = S.ch[0].audio;
-    const raw = a.currentTime;
-    const now = performance.now() / 1000;
-    if (!S.aclock || raw !== S.aclock.raw) S.aclock = { raw, at: now };
-    return S.aclock.raw + Math.min(now - S.aclock.at, 0.3) * a.playbackRate;
-  }
-  // 飛ばして合わせた直後は、鳴り出すまで待つ（その間はズレを判定しない）
-  function settle() {
+
+  // ---------- 鳴らす ----------
+  // 曲の位置 t（いま映像に出ている位置）から鳴らし始める。鳴っていれば、短く重ねて乗り換える
+  function begin(t, why) {
+    const ctx = S.ctx;
+    if (ctx.state === "suspended") ctx.resume();
+    const now = ctx.currentTime;
+    const at = now + START_LEAD;
+    // at に予約した音が聞こえるのは、映像がさらに (at − いま聞こえている時刻) 進んだとき
+    const media = t + S.offset + (at - heardCtx());
+    endGen(at);
+    const bus = S.ch.map((c) => {
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, now);
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(1, at + FADE);
+      g.connect(c.gain);
+      return g;
+    });
+    S.gen = { at, media, next: chunkOf(media), bus, nodes: [] };
+    S.stat.reanchors++;
+    S.stat.lastWhy = why;
     S.settleUntil = performance.now() + SETTLE_MS;
     S.win = null;
     S.clock = null;
-    S.aclock = null;
+    need(S.gen.next, true);
+    schedule();
   }
 
-  function startAll(t) {
-    if (S.ctx.state === "suspended") S.ctx.resume();
-    S.playing = true;
-    t += S.seekLead;
-    settle();
-    diag("start", { t: +t.toFixed(2), ...snapshot() });
-    for (const c of S.ch) {
-      c.audio.currentTime = t;
-      c.audio.playbackRate = state.rate;
-      c.audio.play().then(() => diag("start-ok", { part: c.id })).catch((err) => {
-        diag("start-ng", { part: c.id, err: `${err.name}: ${err.message}` });
-        if (!S.playing) return;
-        S.playing = false;
-        pauseAll();
-        toast("画面をタップすると分けた音が出ます");
-      });
+  function endGen(at) {
+    const g = S.gen;
+    if (!g) return;
+    S.gen = null;
+    for (const b of g.bus) {
+      b.gain.cancelScheduledValues(at);
+      b.gain.setValueAtTime(1, at);
+      b.gain.linearRampToValueAtTime(0, at + FADE);
+    }
+    for (const { n } of g.nodes) { try { n.stop(at + FADE + 0.005); } catch { /* 鳴り終わっている */ } }
+    setTimeout(() => { for (const b of g.bus) b.disconnect(); }, (at - S.ctx.currentTime + 0.2) * 1000);
+  }
+
+  function stopGen() {
+    if (S.gen) endGen(S.ctx.currentTime);
+  }
+
+  // 取れているかたまりを、少し先まで順に予約する（かたまりどうしは隙間なくつながる）
+  function schedule() {
+    const g = S.gen, m = S.mix;
+    if (!g || !m) return;
+    const ctx = S.ctx;
+    const now = ctx.currentTime;
+    g.nodes = g.nodes.filter((x) => x.end > now);
+    for (;;) {
+      const i = g.next;
+      const start = i * CHUNK;
+      if (start >= m.dur) break;
+      const when = g.at + (start - g.media);
+      if (when > now + HORIZON) break;
+      const k = S.chunks.get(i);
+      if (!k?.bufs) { need(i, true); break; } // まだ届いていない。届いたらそこから鳴らす
+      k.used = performance.now();
+      const len = k.bufs[0].duration;
+      let t = when, off = 0;
+      if (t < now + 0.005) { off = now + 0.005 - t; t = now + 0.005; } // 遅れて届いたぶんは途中から
+      if (off < len) {
+        k.bufs.forEach((b, p) => {
+          const n = ctx.createBufferSource();
+          n.buffer = b;
+          n.connect(g.bus[p]);
+          n.start(t, off);
+          g.nodes.push({ n, end: t + len - off });
+        });
+      }
+      g.next = i + 1;
     }
   }
-  function pauseAll() {
-    S.playing = false;
-    S.clock = null;
-    for (const c of S.ch) c.audio?.pause();
-  }
-  // 飛ばすと、新しい位置の音を取りに行くあいだ鳴り出しが遅れる（iPhone で 0.3〜0.6 秒）。
-  // その間も映像は進むので、遅れるぶん先へ飛ばす。先へ飛ばす量は着地のズレから学習する
-  function seekAll(t, { ahead = true } = {}) {
-    S.seeks = (S.seeks || 0) + 1;
-    settle();
-    const to = Math.max(0, t + (ahead ? S.seekLead : 0));
-    for (const c of S.ch) c.audio.currentTime = to;
-  }
+  setInterval(schedule, 200); // 画面の更新が止まっても予約は続ける
 
   function owns() { return S.owning; }
 
   function updateOwnership() {
-    // 処理系が動き出す（最初に画面に触れる）までは YouTube の音のまま鳴らす
-    const want = S.available && S.on && S.loaded && S.ctx?.state === "running"
+    // 処理系が動き出す（最初に画面に触れる）までは YouTube の音のまま鳴らす。
+    // 速度を変えている間も YouTube の音（分けた音は速度を変えると音程まで変わってしまう）
+    const ready = S.available && S.on && S.loaded && S.ctx?.state === "running"
       && S.loadedId === state.videoId && !!state.player?.mute;
+    const want = ready && state.rate === 1;
+    if (ready && !want && !S.rateToast) {
+      S.rateToast = true;
+      toast("速度を変えている間は元の音で鳴ります");
+    }
+    if (want) S.rateToast = false;
     if (want === S.owning) return;
     S.owning = want;
     if (want) {
       state.player.mute();
     } else {
-      pauseAll();
+      stopGen();
       if (state.player?.unMute && !preroll) state.player.unMute();
     }
     renderPower();
@@ -411,62 +520,83 @@ window.Stems = (() => {
       const st = state.player.getPlayerState?.();
       const want = st === YT.PlayerState.PLAYING && !preroll;
       if (!want) {
-        if (S.playing) pauseAll();
-      } else if (!S.playing) {
-        startAll(ytNow());
+        if (S.gen) stopGen();
+      } else if (!S.gen) {
+        begin(ytNow(), "start");
       } else {
         follow();
       }
+      prefetch();
+      schedule();
     }
     drawMeters();
   }
 
   function follow() {
     const now = performance.now();
-    const lead = S.ch[0].audio;
-    for (const c of S.ch) {
-      // 速度は SPEED で変えたときだけ合わせる
-      if (c.audio.playbackRate !== state.rate) c.audio.playbackRate = state.rate;
-      // パート同士のずれ直しは、大きくずれたときだけ・1本あたり2秒に1回まで
-      if (c !== lead && now > (c.fixedAt || 0) + 2000
-          && Math.abs(c.audio.currentTime - lead.currentTime) > SPREAD) {
-        c.fixedAt = now;
-        c.audio.currentTime = lead.currentTime;
-      }
-    }
     if (now < S.settleUntil) return;
-
-    const yt = ytNow();
-    const d = audioNow() - yt;
-    if (Math.abs(d) > HARD) { seekAll(yt); return; }
-
+    const d = heardMedia() - (ytNow() + S.offset);
+    S.stat.d = d;
+    if (Math.abs(d) > HARD) { begin(ytNow(), "hard " + Math.round(d * 1000)); return; }
     if (!S.win) S.win = { start: now, sum: 0, n: 0 };
     S.win.sum += d;
     S.win.n++;
     if (now - S.win.start < WINDOW_MS) return;
     const mean = S.win.sum / S.win.n;
     S.win = null;
-    S.drift = mean;   // 記録用
+    S.stat.mean = mean;
     if (Math.abs(mean) <= TOL || now - (S.fixedAt || 0) < MIN_GAP_MS) return;
-
-    // 平均で mean だけずれて鳴っている。次からはそのぶん見越して飛ばす
-    S.seekLead = clamp(S.seekLead - mean, 0, 1.5);
-    savePrefs();
     S.fixedAt = now;
-    seekAll(yt);
+    begin(ytNow(), "mean " + Math.round(mean * 1000));
   }
 
-  // ルーパー側のシーク（A–B ループの折り返しなど）。映像も同じだけ止まって読み込むので、先へは飛ばさない
+  // ルーパー側のシーク（A–B ループの折り返しなど）
   function seek(t) {
-    if (S.owning && S.loaded) seekAll(t, { ahead: false });
+    S.clock = null;
+    if (S.owning && S.gen) begin(t, "seek");
   }
+
+  // ---------- Sync：音のタイミングを耳で合わせる ----------
+  function setOffset(v) {
+    S.offset = clamp(Math.round(v * 1000) / 1000, -OFFSET_MAX, OFFSET_MAX);
+    renderSync();
+    savePrefs();
+    if (S.owning && S.gen) begin(ytNow(), "offset");
+  }
+  function renderSync() {
+    const ms = Math.round(S.offset * 1000);
+    ui.syncLcd.innerHTML = ms > 0 ? `<b>+</b>${ms}` : String(ms);
+    ui.syncLcd.setAttribute("aria-label", `音のずらし ${ms} ミリ秒`);
+  }
+  // 押し続けると続けて動く
+  function wireNudge(btn, dir) {
+    let timer = null;
+    const stop = () => { clearTimeout(timer); timer = null; };
+    btn.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      btn.dataset.held = "1";
+      setOffset(S.offset + dir * OFFSET_STEP);
+      const again = (delay) => { timer = setTimeout(() => { setOffset(S.offset + dir * OFFSET_STEP); again(80); }, delay); };
+      again(450);
+    });
+    for (const t of ["pointerup", "pointercancel", "pointerleave"]) btn.addEventListener(t, stop);
+    btn.addEventListener("click", (e) => {
+      // キーボードで押したとき（pointerdown が来ない）だけここで動かす
+      if (btn.dataset.held) { delete btn.dataset.held; return; }
+      e.preventDefault();
+      setOffset(S.offset + dir * OFFSET_STEP);
+    });
+  }
+  wireNudge(ui.earlier, +1);
+  wireNudge(ui.later, -1);
+  ui.syncReset.addEventListener("click", () => setOffset(0));
 
   // メーター：いま実際に鳴っている音（フェーダー・消音のあと）
   function drawMeters() {
     for (const c of S.ch) {
       if (!c.ui) continue;
       let lv = 0;
-      if (S.playing && c.analyser) {
+      if (S.gen && c.analyser) {
         c.analyser.getFloatTimeDomainData(c.buf);
         let peak = 0;
         for (let i = 0; i < c.buf.length; i++) {
@@ -669,6 +799,7 @@ window.Stems = (() => {
     diag("init", { ua: navigator.userAgent, audioSession: !!navigator.audioSession });
     loadPrefs();
     buildMixer();
+    renderSync();
     ui.dock.hidden = false;
     ui.app.dataset.stems = "1";
     const id = S.videoId || state.videoId;

@@ -3,9 +3,8 @@
 標準の http.server に「キャッシュしない」ヘッダーを足したもの。
 これがないと、ブラウザが古い app.js / index.html を使い回して動かなくなることがある。
 
-/stems/<動画ID>/<パート>.m4a では、~/YouTubeパート分離 が分けた音を配る。
-iPhone の Safari は、別のポートから読んだ音を Web Audio に通すと無音にしてしまうので、
-分けた音はページと同じこのサーバーから出す。"""
+/stems/<動画ID>/ では、~/YouTubeパート分離 が分けた音を配る。画面が使うのは
+mix.json（形式）と mix.pcm（6パートを1本にまとめた生の音）で、mix.pcm は Range で少しずつ取られる。"""
 import os
 import re
 import sys
@@ -13,7 +12,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
 STEM_DIR = os.path.expanduser("~/YouTubeパート分離/cache/stems")
-STEM_PATH = re.compile(r"/stems/([A-Za-z0-9_-]{11})/(drums|bass|other|vocals|guitar|piano)\.m4a")
+STEM_PATH = re.compile(r"/stems/([A-Za-z0-9_-]{11})/((?:drums|bass|other|vocals|guitar|piano)\.m4a|mix\.pcm|mix\.json)")
+TYPES = {".m4a": "audio/mp4", ".pcm": "application/octet-stream", ".json": "application/json"}
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -41,7 +41,7 @@ class Handler(SimpleHTTPRequestHandler):
     # 音は途中から読めないと Safari が再生しない（Range 対応）
     def send_stem(self, body):
         m = STEM_PATH.fullmatch(self.path.split("?")[0])
-        path = m and os.path.join(STEM_DIR, m.group(1), m.group(2) + ".m4a")
+        path = m and os.path.join(STEM_DIR, m.group(1), m.group(2))
         if not path or not os.path.isfile(path):
             return self.send_error(404)
         size = os.path.getsize(path)
@@ -62,9 +62,9 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.end_headers()
 
         length = end - start + 1
-        self.cache = True                           # 分けた音は変わらないので使い回してよい
+        self.cache = path.endswith(".m4a")          # 分けた音は変わらないので使い回してよい（mix は作り直すことがある）
         self.send_response(206 if partial else 200)
-        self.send_header("Content-Type", "audio/mp4")
+        self.send_header("Content-Type", TYPES[os.path.splitext(path)[1]])
         self.send_header("Content-Length", str(length))
         self.send_header("Accept-Ranges", "bytes")
         if partial:
