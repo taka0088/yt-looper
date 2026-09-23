@@ -1114,6 +1114,7 @@ window.Stems = (() => {
       return; // 分離サーバーがなければ何も出さない
     }
     diag("init", { ua: navigator.userAgent, audioSession: !!navigator.audioSession });
+    $("localGoPublic").hidden = false;
     activate();
   }
 

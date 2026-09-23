@@ -105,6 +105,14 @@
           <p class="local-total" id="localTotal"></p>
           <input type="file" id="localFile" multiple hidden>
         </div>
+        <!-- Mac 版だけ：取り込みは公開版でするので、そこへの入口を出す（stems.js が出す） -->
+        <div class="local-stems" id="localGoPublic" hidden>
+          <div class="local-head">
+            <span>分けた曲（Mac なしで聴く）</span>
+            <a class="metal-btn" href="https://taka0088.github.io/yt-looper/">公開版を開く</a>
+          </div>
+          <p class="local-total">取り込みは公開版でします。ここ（Mac 版）で「iPhone に保存」したファイルを、公開版の この欄の「取り込む」で選んでください。</p>
+        </div>
         <label class="settings-row">
           <span>YouTube Data API キー</span>
           <input id="apiKeyInput2" type="text" autocomplete="off" spellcheck="false" placeholder="未設定">
