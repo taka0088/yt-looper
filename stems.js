@@ -44,6 +44,28 @@ window.Stems = (() => {
     pollTimer: null,
   };
 
+  // ---------- 一時的な診断：iPhone の中の状態を Mac の分離サーバーの記録に送る ----------
+  function diag(tag, extra = {}) {
+    if (!SERVER) return;
+    const body = JSON.stringify({ tag, t: Math.round(performance.now()), ...extra });
+    fetch(SERVER + "/api/diag", { method: "POST", body, keepalive: true }).catch(() => {});
+  }
+  function snapshot() {
+    const p = state.player;
+    return {
+      ctx: S.ctx?.state, owning: S.owning, playing: S.playing, loaded: S.loaded, on: S.on,
+      yt: p?.getPlayerState?.(), ytMuted: p?.isMuted?.(), ytT: +(p?.getCurrentTime?.() || 0).toFixed(2),
+      vis: document.visibilityState,
+      a: S.ch.map((c) => {
+        const a = c.audio;
+        if (!a) return "-";
+        return `${a.paused ? "P" : ">"}${a.readyState}/${a.currentTime.toFixed(1)}${a.muted ? "/m" : ""}${a.error ? "/E" + a.error.code : ""}`;
+      }),
+      lv: S.ch.map((c) => c.level.toFixed(2)),
+    };
+  }
+  setInterval(() => { if (S.available && S.loadedId) diag("snap", snapshot()); }, 3000);
+
   // ---------- 設定の保存 ----------
   function loadPrefs() {
     try {
@@ -181,20 +203,30 @@ window.Stems = (() => {
   }
 
   // ---------- 音の配線 ----------
+  function ensureAudio() {
+    for (const c of S.ch) {
+      if (c.audio) continue;
+      const a = new Audio();
+      a.preload = "auto";
+      a.preservesPitch = true;
+      a.webkitPreservesPitch = true;
+      a.playsInline = true;
+      c.audio = a;
+    }
+  }
+
+  // 音量・メーターの処理系（Web Audio）。iPhone では画面に触れた操作の中で作らないと無音になることが
+  // あるので、unlock の中でだけ作る。作るまでは YouTube の音のまま鳴らしておく
   function ensureGraph() {
     if (S.ctx) return;
     // iPhone のマナーモードでも鳴るよう「再生用の音」として扱わせる（Safari 16.4 以降）
     if (navigator.audioSession) navigator.audioSession.type = "playback";
     const AC = window.AudioContext || window.webkitAudioContext;
     S.ctx = new AC();
+    S.ctx.onstatechange = () => diag("ctx", { state: S.ctx.state });
+    diag("graph", { ctx: S.ctx.state, audioSession: navigator.audioSession?.type || null });
     for (const c of S.ch) {
-      const a = new Audio();
-      a.crossOrigin = "anonymous";
-      a.preload = "auto";
-      a.preservesPitch = true;
-      a.webkitPreservesPitch = true;
-      a.playsInline = true;
-      const src = S.ctx.createMediaElementSource(a);
+      const src = S.ctx.createMediaElementSource(c.audio);
       c.gain = S.ctx.createGain();
       c.analyser = S.ctx.createAnalyser();
       c.analyser.fftSize = 512;
@@ -202,7 +234,6 @@ window.Stems = (() => {
       src.connect(c.gain);
       c.gain.connect(S.ctx.destination);
       c.gain.connect(c.analyser);
-      c.audio = a;
     }
     applyGains();
   }
@@ -212,16 +243,19 @@ window.Stems = (() => {
   // 指の操作は「離した瞬間」（pointerup / touchend）しか操作と認められない。触れた瞬間（pointerdown）は
   // マウスのときだけ認められるので、指の pointerdown では何もしない（ここで失敗すると次の機会を逃す）
   function unlock(e) {
-    if (!S.ctx) return;
     if (e.type === "pointerdown" && e.pointerType !== "mouse") return;
-    if (S.ctx.state !== "running") S.ctx.resume();
+    if (!S.ch[0].audio?.src) return;
+    ensureGraph();
+    const pending = S.ch.filter((c) => !c.unlocked && c.audio.src).length;
+    if (S.ctx.state !== "running" || pending) diag("unlock", { type: e.type, pt: e.pointerType, ctx: S.ctx.state, pending });
+    if (S.ctx.state !== "running") S.ctx.resume().catch((err) => diag("resume-ng", { err: `${err.name}: ${err.message}` }));
     for (const c of S.ch) {
       const a = c.audio;
       if (c.unlocked || !a.src) continue;
       c.unlocked = true;
       a.muted = true;
-      a.play().then(() => { if (!S.playing) a.pause(); a.muted = false; })
-        .catch(() => { c.unlocked = false; a.muted = false; });
+      a.play().then(() => { if (!S.playing) a.pause(); a.muted = false; diag("unlock-ok", { part: c.id }); })
+        .catch((err) => { c.unlocked = false; a.muted = false; diag("unlock-ng", { part: c.id, err: `${err.name}: ${err.message}` }); });
     }
   }
   for (const type of ["pointerdown", "pointerup", "touchend", "keydown"]) {
@@ -229,7 +263,7 @@ window.Stems = (() => {
   }
 
   function loadAudio(id) {
-    ensureGraph();
+    ensureAudio();
     S.loaded = false;
     S.loadedId = id;
     pauseAll();
@@ -241,17 +275,20 @@ window.Stems = (() => {
       a.addEventListener("canplay", ok);
       a.addEventListener("error", ng);
       c.unlocked = false;
-      a.src = `${SERVER}/stems/${id}/${c.id}.m4a`;
+      // ページと同じサーバー（serve.py）から読む。別のポートから読むと iPhone では Web Audio で無音になる
+      a.src = `/stems/${id}/${c.id}.m4a`;
       a.load();
     }));
     renderStatus();
     Promise.all(ready).then(() => {
       if (S.loadedId !== id) return;
       S.loaded = true;
+      diag("loaded", { id });
       updateOwnership();
       renderStatus();
     }).catch((err) => {
       if (S.loadedId !== id) return;
+      diag("load-ng", { id, err: err.message });
       setPhase("error", { error: `${err.message} の音を読み込めませんでした` });
     });
   }
@@ -282,10 +319,12 @@ window.Stems = (() => {
     if (S.ctx.state === "suspended") S.ctx.resume();
     S.playing = true;
     S.drift = 0;
+    diag("start", { t: +t.toFixed(2), ...snapshot() });
     for (const c of S.ch) {
       c.audio.currentTime = t;
       c.audio.playbackRate = state.rate;
-      c.audio.play().catch(() => {
+      c.audio.play().then(() => diag("start-ok", { part: c.id })).catch((err) => {
+        diag("start-ng", { part: c.id, err: `${err.name}: ${err.message}` });
         if (!S.playing) return;
         S.playing = false;
         pauseAll();
@@ -307,7 +346,7 @@ window.Stems = (() => {
   function owns() { return S.owning; }
 
   function updateOwnership() {
-    const want = S.available && S.on && S.loaded && S.loadedId === state.videoId && !!state.player?.mute;
+    const want = S.available && S.on && S.loaded && !!S.ctx && S.loadedId === state.videoId && !!state.player?.mute;
     if (want === S.owning) return;
     S.owning = want;
     if (want) {
@@ -563,6 +602,7 @@ window.Stems = (() => {
       return; // 分離サーバーがなければ何も出さない
     }
     S.available = true;
+    diag("init", { ua: navigator.userAgent, audioSession: !!navigator.audioSession });
     loadPrefs();
     buildMixer();
     ui.dock.hidden = false;
