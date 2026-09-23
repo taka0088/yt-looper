@@ -674,7 +674,7 @@ html[data-cap="black"] .foot.big:active .foot-cap, html[data-cap="black"] .foot.
 .tl-track {
   position: relative;
   height: 18px;
-  touch-action: none;
+  touch-action: pan-y; /* 縦はページのスクロール。横に動かしたときだけ app.js が頭出しする */
   cursor: pointer;
 }
 .tl-track::before {
@@ -746,7 +746,7 @@ html[data-cap="black"] .foot.big:active .foot-cap, html[data-cap="black"] .foot.
   background: linear-gradient(180deg, #0a0b0a, #151714 70%, #101210);
   border-radius: 3px;
   box-shadow: inset 0 2px 5px rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.12);
-  touch-action: none;
+  touch-action: pan-y;
   cursor: pointer;
 }
 .loupe-ticks { position: absolute; inset: 0; pointer-events: none; }

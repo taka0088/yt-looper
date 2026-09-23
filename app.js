@@ -407,12 +407,63 @@ function showLoupeBubble(which, t) {
   el.loupeBubble.className = "tl-bubble show" + (which === "a" || which === "b" ? " " + which : "");
 }
 
+// 再生バー（ミニマップ・ルーペ帯）の指の扱い。指で触れた瞬間には反応せず、横に動かしたら動かし始め、
+// 動かさずに離したらその位置へ。縦に動いたらページのスクロールとして通す（スクロールのつもりで
+// バーに触れただけで頭出しされないように）。スクロールを止めるための一瞬のタッチも無視する。マウスはすぐ反応
+let lastScroll = 0;
+document.addEventListener("scroll", () => { lastScroll = performance.now(); }, { capture: true, passive: true });
+function slideTarget(target, h) {
+  let pend = null, active = null;
+  const grab = (e) => { try { target.setPointerCapture(e.pointerId); } catch {} };
+  target.addEventListener("pointerdown", (e) => {
+    if (!state.ready) return;
+    if (e.pointerType === "mouse") {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      active = e.pointerId;
+      grab(e);
+      h.start(e);
+      return;
+    }
+    if (performance.now() - lastScroll < 400) return; // スクロール中（慣性で流れている）のタッチ
+    pend = { id: e.pointerId, x: e.clientX, y: e.clientY, e };
+  });
+  target.addEventListener("pointermove", (e) => {
+    if (pend && e.pointerId === pend.id) {
+      const dx = Math.abs(e.clientX - pend.x), dy = Math.abs(e.clientY - pend.y);
+      if (dy > 8 && dy > dx) { pend = null; return; }       // 縦：スクロール
+      if (dx > 6 && dx > dy) {                               // 横：動かし始める
+        const first = pend.e;
+        pend = null;
+        active = e.pointerId;
+        grab(e);
+        h.start(first);
+        h.move(e);
+      }
+      return;
+    }
+    if (active === e.pointerId) h.move(e);
+  });
+  target.addEventListener("pointerup", (e) => {
+    if (pend && e.pointerId === pend.id) {                   // 動かさずに離した：その位置へ
+      const first = pend.e;
+      pend = null;
+      h.start(first);
+      h.end(e);
+      return;
+    }
+    if (active === e.pointerId) { active = null; h.end(e); }
+  });
+  target.addEventListener("pointercancel", (e) => {
+    if (pend?.id === e.pointerId) pend = null;
+    if (active === e.pointerId) { active = null; h.cancel(e); }
+  });
+}
+
 // ドラッグ：ハンドルは A/B を動かす、空いた所は頭出し。ドラッグ中は範囲を固定する
 {
   let drag = null; // { which, offset }
-  el.loupeTrack.addEventListener("pointerdown", (e) => {
-    if (!state.ready) return;
-    e.preventDefault();
+  const start = (e) => {
     const handle = e.target.closest(".loupe-handle");
     const t = loupeTimeAt(e.clientX);
     state.loupe.frozen = true;
@@ -425,14 +476,13 @@ function showLoupeBubble(which, t) {
       renderHead(t);
       showLoupeBubble("seek", t);
     }
-    try { el.loupeTrack.setPointerCapture(e.pointerId); } catch {}
-  });
-  el.loupeTrack.addEventListener("pointermove", (e) => {
+  };
+  const move = (e) => {
     if (!drag) return;
     const t = loupeTimeAt(e.clientX);
     if (drag.which === "seek") { renderHead(t); showLoupeBubble("seek", t); }
     else { setMarker(drag.which, t + drag.offset); showLoupeBubble(drag.which, state[drag.which]); }
-  });
+  };
   const end = (e) => {
     if (!drag) return;
     const t = loupeTimeAt(e.clientX);
@@ -443,8 +493,8 @@ function showLoupeBubble(which, t) {
     el.loupeBubble.classList.remove("show");
     renderMarkers();
   };
-  el.loupeTrack.addEventListener("pointerup", end);
-  el.loupeTrack.addEventListener("pointercancel", (e) => { drag = null; state.dragging = null; state.loupe.frozen = false; el.loupeBubble.classList.remove("show"); });
+  const cancel = () => { drag = null; state.dragging = null; state.loupe.frozen = false; el.loupeBubble.classList.remove("show"); };
+  slideTarget(el.loupeTrack, { start, move, end, cancel });
 
   // キーボードで 0.1 秒（Shift で 1 秒）
   for (const hd of [el.loupeA, el.loupeB]) {
@@ -1024,27 +1074,25 @@ function showBubble(which, t) {
 function hideBubble() { el.bubble.classList.remove("show"); }
 
 // ミニマップ：クリック／ドラッグで頭出しだけ
-el.track.addEventListener("pointerdown", (e) => {
-  if (!state.ready) return;
-  e.preventDefault();
-  state.dragging = "seek";
-  try { el.track.setPointerCapture(e.pointerId); } catch {}
-  const t = timeAt(e.clientX);
-  renderHead(t); showBubble("seek", t);
+slideTarget(el.track, {
+  start(e) {
+    state.dragging = "seek";
+    const t = timeAt(e.clientX);
+    renderHead(t); showBubble("seek", t);
+  },
+  move(e) {
+    if (!state.dragging) return;
+    const t = timeAt(e.clientX);
+    renderHead(t); showBubble("seek", t);
+  },
+  end(e) {
+    if (!state.dragging) return;
+    seek(timeAt(e.clientX));
+    state.dragging = null;
+    hideBubble();
+  },
+  cancel() { state.dragging = null; hideBubble(); },
 });
-el.track.addEventListener("pointermove", (e) => {
-  if (!state.dragging) return;
-  const t = timeAt(e.clientX);
-  renderHead(t); showBubble("seek", t);
-});
-function endDrag(e) {
-  if (!state.dragging) return;
-  seek(timeAt(e.clientX));
-  state.dragging = null;
-  hideBubble();
-}
-el.track.addEventListener("pointerup", endDrag);
-el.track.addEventListener("pointercancel", () => { state.dragging = null; hideBubble(); });
 
 // 時刻を直接入力して A点 / B点 を決める
 for (const [input, which] of [[el.timeA, "a"], [el.timeB, "b"]]) {
