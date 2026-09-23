@@ -153,6 +153,9 @@
           <h2>Looper</h2>
           <div class="looper-head-right">
             <button type="button" class="clear-btn" id="clearAB" title="A–B を解除して動画全体に戻す（C）">Clear A–B</button>
+            <button type="button" class="speed-btn sync-btn" id="syncBtn" hidden aria-haspopup="dialog" aria-expanded="false" title="分けた音のタイミングを合わせる">
+              <span class="speed-btn-label">Sync</span>
+            </button>
             <button type="button" class="speed-btn" id="speedBtn" aria-haspopup="dialog" aria-expanded="false" title="再生速度を変える">
               <span class="speed-btn-label">Speed</span>
               <span class="lcd small" id="rateLabel2">1.00</span>
@@ -253,6 +256,18 @@
       </article>
     </section>
 
+
+    <!-- Sync（iPhone）：LOOPER の Sync ボタンで画面の下にせり出す。映像を見ながら合わせられるよう、ページは覆わない。
+         中の帯（#stemsSync）は、狭い画面のときだけ stems.js が STEMS からここへ移す -->
+    <div class="sync-pop" id="syncPop" hidden>
+      <article class="module stems sync-unit" role="dialog" aria-label="音のタイミング">
+        <header class="module-head">
+          <h2>Sync</h2>
+          <button type="button" class="metal-btn" id="syncClose">閉じる</button>
+        </header>
+        <p class="sync-hint">音が映像より遅れて聞こえたら「早く」、先に聞こえたら「遅く」</p>
+      </article>
+    </div>
 
     <!-- SPEED：Mac では左列のラックにそのまま並ぶ。スマホでは LOOPER の SPEED ボタンで引き出したように出てくる -->
     <div class="speed-pop" id="speedPop" hidden>

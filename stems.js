@@ -44,6 +44,7 @@ window.Stems = (() => {
     dock: $("stemsDock"), status: $("stemsStatus"), mixer: $("stemsMixer"),
     power: $("stemsPower"), led: $("stemsLed"), clear: $("stemsAllOn"), flat: $("stemsFlat"),
     sync: $("stemsSync"), syncLcd: $("syncLcd"), earlier: $("syncEarlier"), later: $("syncLater"), syncReset: $("syncReset"),
+    syncBtn: $("syncBtn"), syncPop: $("syncPop"), syncClose: $("syncClose"),
   };
 
   const S = {
@@ -602,6 +603,24 @@ window.Stems = (() => {
   wireNudge(ui.later, -1);
   ui.syncReset.addEventListener("click", () => setOffset(0));
 
+  // 狭い画面（iPhone）では STEMS まで下へスクロールすると映像が見えないので、Sync の帯は
+  // LOOPER の Sync ボタンで画面の下にせり出すユニットへ移す。広い画面では STEMS の中のまま
+  const narrow = window.matchMedia("(max-width: 520px)");
+  const stemsHome = ui.sync.parentNode;
+  function placeSync() {
+    const pop = narrow.matches && S.available;
+    ui.syncBtn.hidden = !pop;
+    if (pop) ui.syncPop.querySelector(".sync-unit").appendChild(ui.sync);
+    else { stemsHome.appendChild(ui.sync); openSync(false); }
+  }
+  function openSync(open) {
+    ui.syncPop.hidden = !open;
+    ui.syncBtn.setAttribute("aria-expanded", String(open));
+  }
+  narrow.addEventListener?.("change", placeSync);
+  ui.syncBtn.addEventListener("click", () => openSync(ui.syncPop.hidden));
+  ui.syncClose.addEventListener("click", () => openSync(false));
+
   // メーター：いま実際に鳴っている音（フェーダー・消音のあと）
   function drawMeters() {
     for (const c of S.ch) {
@@ -811,6 +830,7 @@ window.Stems = (() => {
     loadPrefs();
     buildMixer();
     renderSync();
+    placeSync();
     ui.dock.hidden = false;
     ui.app.dataset.stems = "1";
     const id = S.videoId || state.videoId;

@@ -1658,6 +1658,32 @@ html:has(.app[data-fs="1"]) { overflow: hidden; }
 .stems-sync-lcd b { font-family: var(--font); font-weight: 600; font-size: .85em; margin-right: 1px; }
 .stems-sync-lcd::after { content: "ms"; font-family: var(--font); font-size: .75em; margin-left: 3px; opacity: .8; text-shadow: none; }
 .stems-sync-reset { margin-left: auto; }
+.stems-sync .metal-btn { white-space: nowrap; }
+
+/* iPhone：LOOPER の Sync ボタンで画面の下にせり出すユニット（ページは覆わず、映像を見ながら押せる） */
+.sync-btn[hidden], .sync-pop[hidden] { display: none; }
+.sync-btn .speed-btn-label { padding-right: 5px; }
+.sync-btn[aria-expanded="true"] .speed-btn-label { color: var(--amber); }
+.sync-pop {
+  position: fixed; z-index: 950;
+  left: 8px; right: 8px;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  animation: sync-rise .18s ease-out;
+}
+.sync-pop .sync-unit {
+  padding: 10px 14px 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.28),
+    inset 0 -2px 0 rgba(0,0,0,.35),
+    0 -6px 22px rgba(0,0,0,.75);
+}
+.sync-pop .module-head { margin-bottom: 4px; }
+.sync-pop .module-head .metal-btn { height: 26px; padding: 0 10px; font-size: 12px; border-radius: 6px; }
+.sync-hint { margin: 0 6px 2px; font-size: 12px; line-height: 1.5; color: #bdb6a6; }
+.sync-pop .stems-sync { margin-top: 8px; }
+.sync-pop .stems-sync-label { display: none; }
+@keyframes sync-rise { from { transform: translateY(24px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .sync-pop { animation: none; } }
 
 /* ---- Mac 中くらいの幅：左列にリストで収める ---- */
 @media (min-width: 900px) and (max-width: 1279px) {
