@@ -1,11 +1,15 @@
 "use strict";
-// STEMS：曲を6パートに分けて聴く。Mac の http 版で分離サーバー（~/YouTubeパート分離、8766 番）が
-// 見つかったときだけ出てくる。YouTube の映像は無音で流し、分けた音を映像の時刻に合わせて鳴らす。
+// STEMS：曲を6パートに分けて聴く。YouTube の映像は無音で流し、分けた音を映像の時刻に合わせて鳴らす。
+// 2つの出方がある:
+//  ・Mac の http 版：分離サーバー（~/YouTubeパート分離、8766 番）が見つかったとき。曲を分けて、そこから鳴らす
+//  ・公開版（https）：Mac の「iPhone に保存」で書き出したファイル（.ytstems）をこの端末に取り込んだとき。
+//    Mac がなくても、取り込んだ曲は分けた音で聴ける（端末の IndexedDB に保存）
 // app.js の state / preroll / clamp / fmt / toast を使う。
 
 window.Stems = (() => {
   // https の公開版からは http の Mac に届かない（混在コンテンツ）ので、最初から探さない
   const SERVER = location.protocol === "http:" ? `http://${location.hostname}:8766` : null;
+  const VER = (document.currentScript?.src.match(/\?v=[^&]+/) || [""])[0]; // 付属ファイルも同じ版で読む
   const PARTS = [
     { id: "drums", name: "Drums" },
     { id: "bass", name: "Bass" },
@@ -24,6 +28,7 @@ window.Stems = (() => {
   // 速度を変えたときは、分離サーバーが音程を保ったまま伸び縮みさせた音を作って返す。
   // かたまりどうしは前後 XFADE ずつ重ね、フェードしてつなぐ（サーバーの CHUNK / XFADE と同じ値）
   const XFADE = 0.01;
+  const PAD = 0.3;          // 伸び縮みの計算に使う前後の余白（サーバーの PAD と同じ）
   const AHEAD = 8;          // 再生位置からこの秒数先まで取っておく
   const KEEP = 24;          // 手元に置くかたまりの数（超えたら遠いものから捨てる）
   const HORIZON = 0.5;      // この秒数先まで鳴らす予約を入れておく
@@ -43,6 +48,9 @@ window.Stems = (() => {
     app: document.querySelector(".app"),
     dock: $("stemsDock"), status: $("stemsStatus"), mixer: $("stemsMixer"),
     power: $("stemsPower"), led: $("stemsLed"), clear: $("stemsAllOn"), flat: $("stemsFlat"),
+    exportRow: $("stemsExport"), exportBtn: $("stemsExportBtn"),
+    localWrap: $("localStems"), localList: $("localList"), localTotal: $("localTotal"),
+    localImport: $("localImport"), localFile: $("localFile"),
     sync: $("stemsSync"), syncLcd: $("syncLcd"), earlier: $("syncEarlier"), later: $("syncLater"), syncReset: $("syncReset"),
     syncBtn: $("syncBtn"), syncPop: $("syncPop"), syncClose: $("syncClose"),
   };
@@ -50,7 +58,8 @@ window.Stems = (() => {
   const S = {
     available: false,
     videoId: null,
-    phase: "idle",     // idle | checking | none | working | ready | error | offline
+    mode: SERVER ? "server" : "local", // server＝Mac の分離サーバーから / local＝この端末に取り込んだ曲から
+    phase: "idle",     // idle | checking | none | working | ready | error | offline | absent（この端末に無い）
     job: null,
     loadedId: null,    // 音を読み込み済みの動画
     loaded: false,
@@ -345,18 +354,12 @@ window.Stems = (() => {
       const m = S.mix;
       const k = S.chunks.get(i);
       if (!m || !k || k.bufs) continue;
-      const f0 = Math.round(i * CHUNK * m.sr);
-      const f1 = Math.min(m.frames, Math.round((i + 1) * CHUNK * m.sr));
-      const bpf = m.channels * 2;
       const rate = m.rate;
       S.loading++;
-      (rate === 1
-        ? fetch(m.url, { headers: { Range: `bytes=${f0 * bpf}-${f1 * bpf - 1}` }, cache: "no-store" })
-        : fetch(`${SERVER}/api/pcm?id=${m.id}&rate=${rate}&i=${i}`, { cache: "no-store" }))
-        .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.arrayBuffer(); })
-        .then((ab) => {
+      loadChunk(m, i, rate)
+        .then((bufs) => {
           if (S.mix !== m || S.chunks.get(i) !== k || m.rate !== rate) return;
-          k.bufs = toBuffers(m, ab);
+          k.bufs = bufs;
           schedule();
         })
         .catch((err) => {
@@ -365,6 +368,28 @@ window.Stems = (() => {
         })
         .finally(() => { S.loading--; pump(); });
     }
+  }
+
+  // かたまり i の音（パートごとのステレオの AudioBuffer）を用意する
+  function loadChunk(m, i, rate) {
+    if (m.local) return rate === 1 ? rawChunk(m, i).then((parts) => arraysToBuffers(parts, m.sr)) : localStretched(m, i, rate);
+    const f0 = Math.round(i * CHUNK * m.sr);
+    const f1 = Math.min(m.frames, Math.round((i + 1) * CHUNK * m.sr));
+    const bpf = m.channels * 2;
+    return (rate === 1
+      ? fetch(m.url, { headers: { Range: `bytes=${f0 * bpf}-${f1 * bpf - 1}` }, cache: "no-store" })
+      : fetch(`${SERVER}/api/pcm?id=${m.id}&rate=${rate}&i=${i}`, { cache: "no-store" }))
+      .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.arrayBuffer(); })
+      .then((ab) => toBuffers(m, ab));
+  }
+
+  function arraysToBuffers(parts, sr) {
+    return parts.map(([L, R]) => {
+      const b = S.ctx.createBuffer(2, Math.max(1, L.length), sr);
+      b.getChannelData(0).set(L);
+      b.getChannelData(1).set(R);
+      return b;
+    });
   }
 
   // 16bit・12ch（パート×ステレオ）を、パートごとのステレオの AudioBuffer に分ける
@@ -633,7 +658,7 @@ window.Stems = (() => {
     const pop = narrow.matches && S.available;
     ui.syncBtn.hidden = !pop;
     if (pop) ui.syncPop.querySelector(".sync-unit").appendChild(ui.sync);
-    else { stemsHome.appendChild(ui.sync); openSync(false); }
+    else { stemsHome.insertBefore(ui.sync, ui.exportRow); openSync(false); }
   }
   function openSync(open) {
     ui.syncPop.hidden = !open;
@@ -809,6 +834,10 @@ window.Stems = (() => {
         html = `<p>分けられませんでした。${esc(shortError(S.job?.error))}</p>
                 <button type="button" class="metal-btn stems-go" data-act="prepare">Retry</button>`;
         break;
+      case "absent":
+        html = `<p>この曲はこの端末に入っていません。Mac の YT LOOPER で分けて「iPhone に保存」したファイルを取り込むと、Mac がなくても分けた音で聴けます。</p>
+                <button type="button" class="metal-btn stems-go" data-act="import">取り込む</button>`;
+        break;
       case "offline":
         html = `<p>分離サーバーにつながりません。YT LOOPER.app から開き直すと立ち上がります。</p>
                 <button type="button" class="metal-btn stems-go" data-act="recheck">Retry</button>`;
@@ -816,6 +845,7 @@ window.Stems = (() => {
     }
     box.innerHTML = html;
     renderPower();
+    renderExport();
   }
 
   function shortError(msg) {
@@ -837,6 +867,7 @@ window.Stems = (() => {
     const act = e.target.closest("[data-act]")?.dataset.act;
     if (act === "prepare") prepare();
     else if (act === "recheck") (S.available ? checkVideo(S.videoId) : init());
+    else if (act === "import") ui.localFile.click();
   });
   ui.power.addEventListener("click", () => {
     S.on = !S.on;
@@ -854,23 +885,242 @@ window.Stems = (() => {
     mixChanged();
   });
 
+  // ---------- この端末に取り込んだ曲（Mac なしで聴く） ----------
+  // .ytstems：先頭 "YTSTEMS1"、4バイト（見出しの長さ）、見出し JSON、そのあと 2秒ずつ・パートごとの FLAC。
+  // FLAC には前後に margin 秒の余白があり、読み込んだあと切り落としてつなぐ（Mac の stem_server.py が作る）
+  const Local = (() => {
+    let dbp = null;
+    const db = () => (dbp ||= new Promise((res, rej) => {
+      const r = indexedDB.open("ytlooper-stems", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("songs", { keyPath: "id" });
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    }));
+    const tx = async (mode, fn) => {
+      const d = await db();
+      return new Promise((res, rej) => {
+        const t = d.transaction("songs", mode);
+        const req = fn(t.objectStore("songs"));
+        t.oncomplete = () => res(req.result);
+        t.onerror = t.onabort = () => rej(t.error || new Error("保存できませんでした"));
+      });
+    };
+    return {
+      get: (id) => tx("readonly", (s) => s.get(id)),
+      all: () => tx("readonly", (s) => s.getAll()),
+      put: (rec) => tx("readwrite", (s) => s.put(rec)),
+      del: (id) => tx("readwrite", (s) => s.delete(id)),
+    };
+  })();
+
+  async function initLocal() {
+    if (!window.indexedDB) return;
+    ui.localWrap.hidden = false;
+    let songs = [];
+    try { songs = await Local.all(); } catch { /* 保存場所が使えない（プライベートブラウズなど） */ }
+    renderLocalList(songs);
+    if (songs.length) activate();
+  }
+
+  async function loadLocal(id) {
+    ensureGraph();
+    unloadAudio();
+    S.loadedId = id;
+    let rec = null;
+    try { rec = await Local.get(id); } catch { /* 無いものとして扱う */ }
+    if (S.loadedId !== id) return;
+    if (!rec) { S.loadedId = null; setPhase("absent"); return; }
+    const h = rec.head;
+    S.mix = {
+      id, sr: h.sr, frames: h.frames, dur: h.frames / h.sr, channels: h.parts.length * 2,
+      index: S.ch.map((c) => h.parts.indexOf(c.id)),
+      rate: 1, live: false, ready: h.frames / h.sr,
+      local: { rec, raw: new Map() },
+    };
+    S.loaded = true;
+    setPhase("ready");
+    prefetch();
+    updateOwnership();
+    renderStatus();
+  }
+
+  // かたまり i の元の音（パートごとの [L, R]、44.1kHz、余白は切り落とし済み）。前後の伸び縮みでも使うので少し取っておく
+  let decodeCtx = null;
+  function rawChunk(m, i) {
+    const L = m.local;
+    let p = L.raw.get(i);
+    if (p) return p;
+    const h = L.rec.head;
+    const step = Math.round(h.chunk * h.sr);
+    const s = i * step;
+    const n = Math.min(h.frames, s + step) - s;
+    const lead = Math.min(s, Math.round(h.margin * h.sr));
+    p = Promise.all(S.ch.map(async (c, part) => {
+      const src = m.index[part];
+      if (src < 0 || !h.index[i]) return [new Float32Array(n), new Float32Array(n)];
+      const [off, len] = h.index[i][src];
+      const ab = await L.rec.blob.slice(L.rec.base + off, L.rec.base + off + len).arrayBuffer();
+      // 元と同じ 44.1kHz の処理系で開く（変換しないので、切り落とす位置がサンプル単位で正確）
+      decodeCtx ||= new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(2, 1, h.sr);
+      const b = await new Promise((res, rej) => decodeCtx.decodeAudioData(ab, res, rej));
+      const ch = [b.getChannelData(0), b.getChannelData(b.numberOfChannels > 1 ? 1 : 0)];
+      return ch.map((x) => { const y = new Float32Array(n); y.set(x.subarray(lead, lead + n)); return y; });
+    }));
+    L.raw.set(i, p);
+    p.catch((err) => { L.raw.delete(i); diag("local-ng", { i, err: String(err) }); });
+    while (L.raw.size > 12) L.raw.delete(L.raw.keys().next().value);
+    return p;
+  }
+
+  // 速度を変えたときの音：前後の余白ごと伸び縮みさせ、かたまりの範囲を切り出す（サーバーの _stretch と同じ）
+  async function localStretched(m, i, rate) {
+    const { sr, dur } = m;
+    const step = Math.round(CHUNK * sr);
+    const s = i * CHUNK, e = Math.min((i + 1) * CHUNK, dur);
+    const a0 = Math.max(0, s - XFADE), a1 = Math.min(dur, e + XFADE);
+    const p0 = Math.max(0, a0 - PAD), p1 = Math.min(dur, a1 + PAD);
+    const f0 = Math.round(p0 * sr), f1 = Math.round(p1 * sr);
+    const c0 = Math.floor(f0 / step), c1 = Math.floor((f1 - 1) / step);
+    const raws = await Promise.all(Array.from({ length: c1 - c0 + 1 }, (_, k) => rawChunk(m, c0 + k)));
+    const parts = S.ch.map((_, part) => [0, 1].map((ch) => {
+      const out = new Float32Array(f1 - f0);
+      raws.forEach((r, k) => {
+        const base = (c0 + k) * step, x = r[part][ch];
+        const from = Math.max(f0, base), to = Math.min(f1, base + x.length);
+        if (to > from) out.set(x.subarray(from - base, to - base), from - f0);
+      });
+      return out;
+    }));
+    const out = await stretchInWorker(parts, sr, rate);
+    const o0 = Math.round((a0 - p0) * sr / rate);
+    const n = Math.round((a1 - a0) * sr / rate);
+    const w = Math.min(n, Math.round(2 * XFADE * sr / rate));
+    return out.map((lr) => {
+      const b = S.ctx.createBuffer(2, Math.max(1, n), sr);
+      lr.forEach((x, ch) => {
+        const y = b.getChannelData(ch);
+        y.set(x.subarray(o0, o0 + n));
+        // 重ねた部分：前のかたまりはフェードアウト、次はフェードイン
+        if (a0 < s) for (let k = 0; k < w; k++) y[k] *= k / w;
+        if (a1 > e) for (let k = 0; k < w; k++) y[n - w + k] *= 1 - k / w;
+      });
+      return b;
+    });
+  }
+
+  let worker = null;
+  const jobs = new Map();
+  let jobN = 0;
+  function stretchInWorker(parts, sr, rate) {
+    if (!worker) {
+      worker = new Worker("stretch-worker.js" + VER);
+      worker.onmessage = (e) => {
+        const j = jobs.get(e.data.job);
+        jobs.delete(e.data.job);
+        if (!j) return;
+        e.data.error ? j.rej(new Error(e.data.error)) : j.res(e.data.out);
+      };
+      worker.onerror = () => {
+        for (const j of jobs.values()) j.rej(new Error("速度の処理を始められませんでした"));
+        jobs.clear();
+        worker = null;
+      };
+    }
+    const job = ++jobN;
+    return new Promise((res, rej) => {
+      jobs.set(job, { res, rej });
+      worker.postMessage({ job, parts, sr, rate }, parts.flat().map((a) => a.buffer));
+    });
+  }
+
+  // 取り込む：Mac の「iPhone に保存」で保存したファイルを選ぶ
+  async function importFiles(files) {
+    let ok = 0;
+    for (const f of files) {
+      try {
+        const top = new Uint8Array(await f.slice(0, 12).arrayBuffer());
+        if (new TextDecoder().decode(top.subarray(0, 8)) !== "YTSTEMS1") throw new Error("YT LOOPER の曲のファイルではありません");
+        const hlen = new DataView(top.buffer).getUint32(8, true);
+        const h = JSON.parse(new TextDecoder().decode(await f.slice(12, 12 + hlen).arrayBuffer()));
+        toast(`取り込んでいます：${h.title}`);
+        await Local.put({ id: h.id, title: h.title, dur: h.frames / h.sr, size: f.size, added: Date.now(), head: h, base: 12 + hlen, blob: f });
+        ok++;
+      } catch (err) {
+        const full = /quota/i.test(err?.name || "") || /quota/i.test(String(err));
+        toast(full ? "iPhone の空き容量が足りません" : `取り込めませんでした：${err.message || err}`);
+      }
+    }
+    if (!ok) return;
+    navigator.storage?.persist?.().catch(() => {}); // 端末がデータを勝手に消さないよう頼む
+    const songs = await Local.all();
+    renderLocalList(songs);
+    toast(`${ok} 曲を取り込みました`);
+    if (!S.available) activate();
+    else if (S.videoId && !S.loaded) onVideo(S.videoId);
+  }
+
+  function renderLocalList(songs) {
+    songs.sort((a, b) => b.added - a.added);
+    const total = songs.reduce((t, s) => t + s.size, 0);
+    ui.localList.innerHTML = songs.map((s) => `
+      <li>
+        <span class="local-title">${esc(s.title)}</span>
+        <span class="local-meta">${mmss(s.dur)}・${mb(s.size)}</span>
+        <button type="button" class="text-btn" data-del="${esc(s.id)}" data-title="${esc(s.title)}">削除</button>
+      </li>`).join("");
+    ui.localTotal.textContent = songs.length
+      ? `${songs.length} 曲・合計 ${mb(total)}`
+      : "まだありません。Mac の YT LOOPER で分けた曲を「iPhone に保存」して、ここから取り込むと、Mac がなくても分けた音で聴けます。";
+  }
+  const mb = (n) => (n >= 1e9 ? (n / 1e9).toFixed(1) + "GB" : Math.round(n / 1e6) + "MB");
+
+  ui.localImport?.addEventListener("click", () => ui.localFile.click());
+  ui.localFile?.addEventListener("change", () => {
+    const files = [...ui.localFile.files];
+    ui.localFile.value = "";
+    if (files.length) importFiles(files);
+  });
+  ui.localList?.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-del]");
+    if (!b) return;
+    if (!confirm(`「${b.dataset.title}」をこの端末から削除しますか？\n（Mac で分けた曲はそのまま残ります）`)) return;
+    await Local.del(b.dataset.del);
+    renderLocalList(await Local.all());
+    if (S.loadedId === b.dataset.del) { unloadAudio(); setPhase("absent"); }
+  });
+
+  // Mac 版：いまの曲を iPhone に持ち出すファイルにして保存する
+  function renderExport() {
+    const show = S.mode === "server" && S.phase === "ready" && S.loaded && !S.mix?.live;
+    ui.exportRow.hidden = !show;
+    if (show) ui.exportBtn.href = `${SERVER}/api/export?id=${encodeURIComponent(S.mix.id)}`;
+  }
+  ui.exportBtn?.addEventListener("click", () => toast("ファイルを作っています。数秒で保存が始まります"));
+
   // ---------- 入口 ----------
   function onVideo(id) {
     S.videoId = id;
     if (!S.available) return;
     if (S.loadedId && S.loadedId !== id) unloadAudio();
-    checkVideo(id);
+    if (S.mode === "local") loadLocal(id);
+    else checkVideo(id);
   }
 
   async function init() {
-    if (!SERVER) return;
+    if (S.mode === "local") return initLocal();
     try {
       await api("/api/hello", { timeout: 1500 });
     } catch {
       return; // 分離サーバーがなければ何も出さない
     }
-    S.available = true;
     diag("init", { ua: navigator.userAgent, audioSession: !!navigator.audioSession });
+    activate();
+  }
+
+  // STEMS を出す
+  function activate() {
+    if (S.available) return;
+    S.available = true;
     loadPrefs();
     buildMixer();
     renderSync();

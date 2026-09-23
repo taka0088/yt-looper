@@ -1415,6 +1415,17 @@ html:has(.app[data-fs="1"]) { overflow: hidden; }
 }
 
 /* 設定欄の末尾：どの版が動いているか（キャッシュ確認用） */
+/* 公開版の設定：Mac で「iPhone に保存」した曲を取り込む */
+.local-stems[hidden] { display: none; }
+.local-stems { margin: 4px 0 12px; padding: 10px 0 2px; border-top: 1px solid rgba(255,255,255,.06); }
+.local-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--muted); }
+.local-head .metal-btn { height: 26px; padding: 0 12px; font-size: 12px; border-radius: 6px; flex: none; }
+.local-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.local-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; font-size: 12px; }
+.local-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text, #e9e4d8); }
+.local-meta { color: var(--muted); font-variant-numeric: tabular-nums; }
+.local-total { margin: 8px 0 0; font-size: 11px; line-height: 1.6; color: #6b6f78; }
+
 .build { margin: 10px 0 0; font-size: 11px; color: #6b6f78; letter-spacing: .04em; }
 
 /* 検索欄に曲名を入れたがキーがない人向け：URL 貼り付けを先に案内し、キーの取り方は畳んでおく */
@@ -1660,8 +1671,18 @@ html:has(.app[data-fs="1"]) { overflow: hidden; }
 .stems-sync-reset { margin-left: auto; }
 .stems-sync .metal-btn { white-space: nowrap; }
 
+/* Mac 版：いまの曲を iPhone に持ち出す */
+.stems-export[hidden] { display: none; }
+.stems-export { display: flex; align-items: center; gap: 12px; margin-top: 10px; padding: 0 4px; }
+.stems-export .metal-btn {
+  flex: none; display: inline-flex; align-items: center;
+  height: 28px; padding: 0 12px; font-size: 12px; font-weight: 700; border-radius: 6px;
+  text-decoration: none; white-space: nowrap;
+}
+.stems-export p { margin: 0; font-size: 11px; line-height: 1.5; color: #bdb6a6; }
+
 /* iPhone：LOOPER の Sync ボタンで画面の下にせり出すユニット（ページは覆わず、映像を見ながら押せる） */
-.sync-btn[hidden], .sync-pop[hidden] { display: none; }
+.sync-btn[hidden], .sync-pop[hidden] { display: none !important; } /* 中くらいの幅の .speed-btn の表示指定に負けないように */
 .sync-btn .speed-btn-label { padding-right: 5px; }
 .sync-btn[aria-expanded="true"] .speed-btn-label { color: var(--amber); }
 .sync-pop {
