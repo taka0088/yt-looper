@@ -4,7 +4,10 @@
 これがないと、ブラウザが古い app.js / index.html を使い回して動かなくなることがある。
 
 /stems/<動画ID>/ では、~/YouTubeパート分離 が分けた音を配る。画面が使うのは
-mix.json（形式）と mix.pcm（6パートを1本にまとめた生の音）で、mix.pcm は Range で少しずつ取られる。"""
+mix.json（形式）と mix.pcm（6パートを1本にまとめた生の音）で、mix.pcm は Range で少しずつ取られる。
+
+この Mac の中（127.0.0.1）からだけ受け付ける。同じ Wi-Fi の他の機器からは見えない。
+Mac の起動時に自動で動く（~/Library/LaunchAgents/com.ytlooper.web.plist）。"""
 import os
 import re
 import sys
@@ -102,6 +105,6 @@ class Server(ThreadingHTTPServer):
 
 
 if __name__ == "__main__":
-    with Server(("0.0.0.0", PORT), Handler) as httpd:
+    with Server(("127.0.0.1", PORT), Handler) as httpd:
         print(f"YT LOOPER: http://localhost:{PORT}")
         httpd.serve_forever()
