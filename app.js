@@ -2,7 +2,9 @@
 
 const $ = (s) => document.querySelector(s);
 const STORAGE_KEY = "ytlooper:v1";
-const DEFAULT_RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+// 0.25〜2 を 0.05 刻み（YouTube の埋め込みも 0.05 刻みならそのとおりの速さで動く）
+const DEFAULT_RATES = Array.from({ length: 36 }, (_, i) => Math.round((0.25 + i * 0.05) * 100) / 100);
+const isMajorRate = (r) => Math.abs(r * 4 - Math.round(r * 4)) < 1e-6; // 0.25 の倍数だけ目盛りに数字を出す
 
 const state = {
   player: null,
@@ -208,29 +210,40 @@ function rateAngle(i) {
   return n > 1 ? -KNOB_SWEEP / 2 + (KNOB_SWEEP / (n - 1)) * i : 0;
 }
 
+// いまの速度に最も近い段（保存した区間の古い値や小数の誤差があっても止まらないように）
+function rateIndex(r = state.rate) {
+  let best = 0;
+  state.rates.forEach((x, i) => { if (Math.abs(x - r) < Math.abs(state.rates[best] - r)) best = i; });
+  return best;
+}
+
 function renderRates() {
   el.rates.innerHTML = "";
   el.knobTicks.innerHTML = "";
+  const cur = rateIndex();
   state.rates.forEach((r, i) => {
     const deg = rateAngle(i);
     const rad = (deg - 90) * Math.PI / 180; // 0° を上向きに
+    const major = isMajorRate(r);
+    // ノブ外周の目盛り（0.25 ごとは長く、0.05 ごとは短く）
+    const t = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    const r0 = major ? 88 : 92;
+    t.setAttribute("x1", 100 + r0 * Math.cos(rad)); t.setAttribute("y1", 100 + r0 * Math.sin(rad));
+    t.setAttribute("x2", 100 + 98 * Math.cos(rad)); t.setAttribute("y2", 100 + 98 * Math.sin(rad));
+    if (!major) t.classList.add("minor");
+    if (i === cur) t.classList.add("on");
+    el.knobTicks.appendChild(t);
+    if (!major) return;
     const b = document.createElement("button");
     b.type = "button";
     b.textContent = r + "×";
     b.style.setProperty("--x", (50 + 47 * Math.cos(rad)) + "%");
     b.style.setProperty("--y", (50 + 47 * Math.sin(rad)) + "%");
-    b.setAttribute("aria-pressed", String(r === state.rate));
+    b.setAttribute("aria-pressed", String(i === cur));
     b.addEventListener("click", () => setRate(r));
     el.rates.appendChild(b);
-    // ノブ外周の目盛り
-    const t = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    t.setAttribute("x1", 100 + 88 * Math.cos(rad)); t.setAttribute("y1", 100 + 88 * Math.sin(rad));
-    t.setAttribute("x2", 100 + 98 * Math.cos(rad)); t.setAttribute("y2", 100 + 98 * Math.sin(rad));
-    if (r === state.rate) t.classList.add("on");
-    el.knobTicks.appendChild(t);
   });
-  const idx = Math.max(0, state.rates.indexOf(state.rate));
-  el.knobBody.style.setProperty("--angle", rateAngle(idx) + "deg");
+  el.knobBody.style.setProperty("--angle", rateAngle(cur) + "deg");
   el.knob.setAttribute("aria-valuenow", state.rate);
   el.knob.setAttribute("aria-valuetext", state.rate + "×");
   el.rateLabel.textContent = state.rate.toFixed(2);
@@ -640,7 +653,6 @@ function refreshMeta() {
     state.duration = d;
     state.a = 0;
     state.b = d;
-    state.rates = p.getAvailablePlaybackRates?.() || DEFAULT_RATES;
     state.rate = p.getPlaybackRate?.() || 1;
     renderRates();
     renderMarkers();
@@ -830,7 +842,7 @@ function setRate(r) {
 }
 
 function stepRate(dir) {
-  const i = state.rates.indexOf(state.rate);
+  const i = rateIndex();
   const next = state.rates[clamp(i + dir, 0, state.rates.length - 1)];
   if (next !== undefined) { setRate(next); toast(next + "×"); }
 }
@@ -938,7 +950,7 @@ document.querySelectorAll(".nudge").forEach((wrap) => {
 }
 el.theaterBtn.addEventListener("click", () => setTheater(!isTheater()));
 
-// 全画面：ブラウザの全画面 + シアターモード。iPhone の Safari は非対応なのでボタンを隠す
+// 全画面：ブラウザの全画面（シアターモードは切り替えない）。iPhone の Safari は非対応なのでボタンを隠す
 const fullscreenOK = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
 // iPhone の Safari には全画面 API がないので、動画だけを画面いっぱいに固定する「疑似全画面」を使う。
 // 縦持ちのときは動画を 90° 回して、iPhone を横に倒せば横長いっぱいに見える
@@ -957,7 +969,6 @@ function toggleFullscreen() {
   } else {
     const root = document.documentElement;
     (root.requestFullscreen || root.webkitRequestFullscreen).call(root);
-    if (!isTheater()) setTheater(true);
   }
 }
 el.fullBtn.addEventListener("click", toggleFullscreen);
@@ -1117,7 +1128,7 @@ for (const [input, which] of [[el.timeA, "a"], [el.timeB, "b"]]) {
   const pointerAngle = (e) => Math.atan2(e.clientY - drag.cy, e.clientX - drag.cx) * 180 / Math.PI + 90; // 0° = 上
   el.knob.addEventListener("pointerdown", (e) => {
     const r = el.knob.getBoundingClientRect();
-    drag = { cx: r.left + r.width / 2, cy: r.top + r.height / 2, last: 0, angle: rateAngle(Math.max(0, state.rates.indexOf(state.rate))) };
+    drag = { cx: r.left + r.width / 2, cy: r.top + r.height / 2, last: 0, angle: rateAngle(rateIndex()) };
     drag.last = pointerAngle(e);
     el.knob.classList.add("turning");
     try { el.knob.setPointerCapture(e.pointerId); } catch {}

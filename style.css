@@ -955,7 +955,9 @@ html[data-cap="black"] .foot.big:active .foot-cap, html[data-cap="black"] .foot.
 }
 .rates button[aria-pressed="true"] { color: #8a2c00; }
 .knob-ticks line { stroke: var(--speed-ink); stroke-width: 3; stroke-linecap: round; }
+.knob-ticks line.minor { stroke-width: 1.5; opacity: .6; }
 .knob-ticks line.on { stroke: #8a2c00; stroke-width: 4; }
+.knob-ticks line.minor.on { opacity: 1; stroke-width: 3; }
 
 /* ---- キーボード説明 ---- */
 .keys { padding: 6px 4px 0; }
